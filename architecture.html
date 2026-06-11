@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>VNG Insider · TikTok Agent — System Architecture</title>
+  <style>
+    :root {
+      --bg: #fafaf9;
+      --surface: #ffffff;
+      --surface-2: #f6f6f5;
+      --border: #e5e5e5;
+      --text-1: #111111;
+      --text-2: #5a5a5a;
+      --text-3: #8a8a8a;
+      --vng: #EE5723;
+      --vng-soft: #FFF1EB;
+      --vng-bg: #FFF8F4;
+      --blue: #2563eb;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #0f0f0e;
+        --surface: #1a1a19;
+        --surface-2: #232322;
+        --border: #2e2e2c;
+        --text-1: #f5f5f4;
+        --text-2: #b0b0ad;
+        --text-3: #7a7a78;
+        --vng-soft: #2a1810;
+        --vng-bg: #1f140e;
+      }
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0; padding: 0;
+      background: var(--bg);
+      color: var(--text-1);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", ui-sans-serif, system-ui, sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+    .wrap {
+      max-width: 1140px;
+      margin: 0 auto;
+      padding: 40px 24px 80px;
+    }
+    header {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 8px;
+      flex-wrap: wrap;
+    }
+    h1 {
+      font-size: 22px;
+      font-weight: 700;
+      margin: 0;
+      letter-spacing: -0.01em;
+    }
+    .badge {
+      display: inline-block;
+      padding: 3px 10px;
+      border-radius: 999px;
+      background: var(--vng);
+      color: #fff;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      vertical-align: middle;
+      margin-left: 6px;
+    }
+    .sub {
+      color: var(--text-2);
+      font-size: 14px;
+      margin: 4px 0 28px;
+    }
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 24px;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.02);
+    }
+    .legend {
+      display: flex;
+      gap: 18px;
+      flex-wrap: wrap;
+      font-size: 12px;
+      color: var(--text-2);
+      margin-bottom: 18px;
+    }
+    .legend span {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .swatch {
+      display: inline-block;
+      width: 22px;
+      height: 2px;
+      border-radius: 2px;
+    }
+    .sw-flow     { background: #888; }
+    .sw-feedback { background: var(--vng); background-image: linear-gradient(to right, var(--vng) 60%, transparent 60%); background-size: 6px 2px; }
+    .sw-human    { background: var(--blue); background-image: linear-gradient(to right, var(--blue) 50%, transparent 50%); background-size: 4px 2px; }
+    .sw-orch     { background: #b5b5b5; }
+    svg { width: 100%; height: auto; display: block; }
+
+    /* Visually hidden but accessible */
+    .sr-only {
+      position: absolute;
+      width: 1px; height: 1px;
+      padding: 0; margin: -1px;
+      overflow: hidden; clip: rect(0,0,0,0);
+      white-space: nowrap; border: 0;
+    }
+
+    .notes {
+      margin-top: 24px;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 12px;
+    }
+    .note {
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 14px 16px;
+      font-size: 13px;
+      line-height: 1.55;
+      color: var(--text-2);
+    }
+    .note b { color: var(--text-1); font-weight: 600; }
+    .note .tag {
+      display: inline-block;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      color: var(--vng);
+      margin-bottom: 4px;
+    }
+    footer {
+      margin-top: 32px;
+      color: var(--text-3);
+      font-size: 12px;
+      text-align: center;
+    }
+
+    /* SVG styles inherit from CSS variables of host page */
+    .s-title    { font: 700 18px ui-sans-serif, system-ui, sans-serif; fill: var(--text-1); }
+    .s-subtitle { font: 400 12px ui-sans-serif, system-ui, sans-serif; fill: var(--text-3); }
+    .s-h        { font: 700 13px ui-sans-serif, system-ui, sans-serif; fill: var(--text-1); }
+    .s-lbl      { font: 600 13px ui-sans-serif, system-ui, sans-serif; fill: var(--text-1); }
+    .s-meta     { font: 400 11.5px ui-sans-serif, system-ui, sans-serif; fill: var(--text-2); }
+    .s-tag      { font: 700 10px ui-sans-serif, system-ui, sans-serif; fill: var(--vng); letter-spacing: 0.5px; }
+    .s-box      { fill: var(--surface); stroke: var(--border); stroke-width: 1; }
+    .s-box-ui   { fill: var(--surface-2); stroke: var(--border); stroke-width: 1; }
+    .s-box-orch { fill: var(--vng-soft); stroke: var(--vng); stroke-width: 1.5; }
+    .s-box-gate { fill: var(--vng-bg); stroke: var(--vng); stroke-width: 1; }
+    .s-pill     { fill: var(--surface); stroke: var(--border); stroke-width: 1; }
+    .s-flow     { stroke: #888; stroke-width: 1.6; fill: none; }
+    .s-flow-l   { stroke: #b5b5b5; stroke-width: 1; fill: none; }
+    .s-feedback { stroke: var(--vng); stroke-width: 1.8; stroke-dasharray: 5 3; fill: none; }
+    .s-human    { stroke: var(--blue); stroke-width: 1.5; stroke-dasharray: 2 3; fill: none; }
+    .s-fb-l     { font: 700 11px ui-sans-serif, system-ui, sans-serif; fill: var(--vng); }
+    .s-hm-l     { font: 600 10px ui-sans-serif, system-ui, sans-serif; fill: var(--blue); }
+
+    /* Hover interactivity */
+    g.agent { cursor: default; transition: transform 0.15s ease, filter 0.15s ease; transform-origin: center; transform-box: fill-box; }
+    g.agent:hover { transform: translateY(-2px); filter: drop-shadow(0 4px 10px rgba(238, 87, 35, 0.18)); }
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <header>
+      <div>
+        <h1>VNG Insider · TikTok Agent <span class="badge">SYSTEM DESIGN</span></h1>
+        <div class="sub">5 agents + orchestrator · localhost dashboard · vòng học khép kín (vòng sau giỏi hơn vòng trước)</div>
+      </div>
+    </header>
+
+    <div class="card">
+      <div class="legend" aria-label="Flow legend">
+        <span><i class="swatch sw-flow"></i> Pipeline (A → B → C → D → E)</span>
+        <span><i class="swatch sw-feedback"></i> Self-learning loop (E → B)</span>
+        <span><i class="swatch sw-human"></i> Human-in-the-loop</span>
+        <span><i class="swatch sw-orch"></i> Orchestration / storage</span>
+      </div>
+
+      <h2 class="sr-only">Architecture diagram of the VNG Insider TikTok Agent: five agents coordinated by an orchestrator, controlled by a localhost dashboard, with storage and external services.</h2>
+
+      <svg viewBox="0 0 1000 880" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="diag-title diag-desc">
+        <title id="diag-title">VNG Insider — TikTok AI Agent System Architecture</title>
+        <desc id="diag-desc">Five agents (Scout, Creative Brain, Producer, Publisher, Analyst) coordinated by an Orchestrator, fronted by a localhost dashboard for human-in-the-loop control, backed by a clip warehouse, scripts/insights store, metrics DB, and external services (TikTok API, Apify, LLM Opus 4.8, TTS). Self-learning feedback loop from Analyst back to Creative Brain.</desc>
+
+        <defs>
+          <marker id="ar"  markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#888"/></marker>
+          <marker id="aro" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#EE5723"/></marker>
+          <marker id="arb" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#2563eb"/></marker>
+        </defs>
+
+        <!-- TITLE -->
+        <text x="500" y="26" class="s-title" text-anchor="middle">VNG Insider · TikTok Agent — System Architecture</text>
+        <text x="500" y="44" class="s-subtitle" text-anchor="middle">5 agents + orchestrator · localhost dashboard · vòng học khép kín</text>
+
+        <!-- LAYER 1 — LOCALHOST DASHBOARD -->
+        <rect x="40" y="62" width="920" height="80" rx="8" class="s-box-ui"/>
+        <text x="55" y="82" class="s-lbl">Localhost Dashboard</text>
+        <text x="55" y="98" class="s-meta">Human-in-the-loop · Next.js / React · gọi Orchestrator qua HTTP</text>
+        <rect x="278" y="98" width="158" height="36" rx="6" class="s-pill"/>
+        <text x="357" y="113" class="s-meta" text-anchor="middle">Brand Config</text>
+        <text x="357" y="126" class="s-meta" text-anchor="middle">VNG Insider guide · tone</text>
+        <rect x="448" y="98" width="158" height="36" rx="6" class="s-pill"/>
+        <text x="527" y="113" class="s-meta" text-anchor="middle">Schedule / Trigger</text>
+        <text x="527" y="126" class="s-meta" text-anchor="middle">Auto · On-demand</text>
+        <rect x="618" y="98" width="158" height="36" rx="6" class="s-pill"/>
+        <text x="697" y="113" class="s-meta" text-anchor="middle">Scale Approval</text>
+        <text x="697" y="126" class="s-meta" text-anchor="middle">Human bấm xác nhận</text>
+        <rect x="788" y="98" width="158" height="36" rx="6" class="s-pill"/>
+        <text x="867" y="113" class="s-meta" text-anchor="middle">Metrics + Decisions</text>
+        <text x="867" y="126" class="s-meta" text-anchor="middle">Scale / Monitor / Kill</text>
+
+        <!-- LAYER 2 — ORCHESTRATOR -->
+        <rect x="40" y="168" width="920" height="58" rx="8" class="s-box-orch"/>
+        <text x="55" y="190" class="s-lbl">[★] Orchestrator</text>
+        <text x="55" y="208" class="s-meta">Routing · shared JSON schema · state machine · LLM dispatch · điều phối 5 agent</text>
+        <text x="945" y="208" class="s-tag" text-anchor="end">GreenNode AgentBase</text>
+        <path d="M 500 142 L 500 168" class="s-human" marker-end="url(#arb)"/>
+        <text x="508" y="158" class="s-hm-l">trigger · config · approve</text>
+
+        <!-- LAYER 3 — 5 AGENTS PIPELINE -->
+        <g class="agent">
+          <rect x="40" y="252" width="174" height="142" rx="8" class="s-box"/>
+          <text x="54" y="272" class="s-tag">A · WEEKLY</text>
+          <text x="54" y="290" class="s-lbl">Scout</text>
+          <text x="54" y="306" class="s-meta">Trinh sát thị trường</text>
+          <text x="54" y="328" class="s-meta">• Quét format / hook viral</text>
+          <text x="54" y="346" class="s-meta">• Seed ngưỡng tuyệt đối</text>
+          <text x="54" y="364" class="s-meta">• Digest trend → B</text>
+          <text x="54" y="384" class="s-tag">owner: Kiệt</text>
+        </g>
+        <g class="agent">
+          <rect x="226" y="252" width="174" height="142" rx="8" class="s-box"/>
+          <text x="240" y="272" class="s-tag">B · DAILY · OPUS 4.8</text>
+          <text x="240" y="290" class="s-lbl">Creative Brain</text>
+          <text x="240" y="306" class="s-meta">Strategist + Writer</text>
+          <text x="240" y="328" class="s-meta">• Idea từ trend + insight</text>
+          <text x="240" y="346" class="s-meta">• Script 40–55s + hook 2–3s</text>
+          <text x="240" y="364" class="s-meta">• Shot list (chọn clip kho)</text>
+          <text x="240" y="384" class="s-tag">owner: Kiệt</text>
+        </g>
+        <g class="agent">
+          <rect x="412" y="252" width="174" height="142" rx="8" class="s-box"/>
+          <text x="426" y="272" class="s-tag">C · DAILY</text>
+          <text x="426" y="290" class="s-lbl">Producer</text>
+          <text x="426" y="306" class="s-meta">Video + Voiceover</text>
+          <text x="426" y="328" class="s-meta">• Ghép clip theo shot list</text>
+          <text x="426" y="346" class="s-meta">• Chèn text hook 2–3s</text>
+          <text x="426" y="364" class="s-meta">• TTS Việt · tone hài</text>
+          <text x="426" y="384" class="s-tag">owner: Nam</text>
+        </g>
+        <g class="agent">
+          <rect x="598" y="252" width="174" height="142" rx="8" class="s-box"/>
+          <text x="612" y="272" class="s-tag">D · DAILY + REALTIME</text>
+          <text x="612" y="290" class="s-lbl">Publisher</text>
+          <text x="612" y="306" class="s-meta">Đăng + Thu metric</text>
+          <text x="612" y="328" class="s-meta">• TikTok API post</text>
+          <text x="612" y="346" class="s-meta">• Scheduled + on-demand</text>
+          <text x="612" y="364" class="s-meta">• Kéo view · retention · CTR</text>
+          <text x="612" y="384" class="s-tag">owner: Nam</text>
+        </g>
+        <g class="agent">
+          <rect x="784" y="252" width="176" height="142" rx="8" class="s-box-gate"/>
+          <text x="798" y="272" class="s-tag">E · DAILY + WEEKLY</text>
+          <text x="798" y="290" class="s-lbl">Analyst</text>
+          <text x="798" y="306" class="s-meta">Insight + Decision</text>
+          <text x="798" y="328" class="s-meta">• Absolute Gate (2 phanh)</text>
+          <text x="798" y="346" class="s-meta">• Scale / Monitor / Kill</text>
+          <text x="798" y="364" class="s-meta">• Insight digest → B</text>
+          <text x="798" y="384" class="s-tag">owner: Kiệt + Nam</text>
+        </g>
+
+        <!-- Pipeline arrows -->
+        <path d="M 214 323 L 226 323" class="s-flow" marker-end="url(#ar)"/>
+        <path d="M 400 323 L 412 323" class="s-flow" marker-end="url(#ar)"/>
+        <path d="M 586 323 L 598 323" class="s-flow" marker-end="url(#ar)"/>
+        <path d="M 772 323 L 784 323" class="s-flow" marker-end="url(#ar)"/>
+
+        <!-- Orchestrator → each agent -->
+        <path d="M 127 226 L 127 252" class="s-flow-l"/>
+        <path d="M 313 226 L 313 252" class="s-flow-l"/>
+        <path d="M 499 226 L 499 252" class="s-flow-l"/>
+        <path d="M 685 226 L 685 252" class="s-flow-l"/>
+        <path d="M 872 226 L 872 252" class="s-flow-l"/>
+
+        <!-- Feedback loop E → B -->
+        <path d="M 872 252 C 872 410, 313 410, 313 394" class="s-feedback" marker-end="url(#aro)"/>
+        <text x="592" y="425" class="s-fb-l" text-anchor="middle">↺ Self-learning loop · insight digest (E → B) · vòng sau giỏi hơn vòng trước</text>
+
+        <!-- E → Dashboard (scale proposal) -->
+        <path d="M 872 252 C 950 220, 950 160, 867 142" class="s-human" marker-end="url(#arb)"/>
+        <text x="958" y="195" class="s-hm-l" text-anchor="end">scale proposal</text>
+
+        <!-- LAYER 4 — STORAGE -->
+        <text x="40" y="465" class="s-h">Storage Layer</text>
+        <rect x="40" y="475" width="222" height="68" rx="8" class="s-box"/>
+        <text x="54" y="496" class="s-lbl">Clip Warehouse</text>
+        <text x="54" y="513" class="s-meta">Nghi quay sẵn · tagged</text>
+        <text x="54" y="530" class="s-meta">Campus · office · canteen · events</text>
+
+        <rect x="274" y="475" width="222" height="68" rx="8" class="s-box"/>
+        <text x="288" y="496" class="s-lbl">Script + Insight Store</text>
+        <text x="288" y="513" class="s-meta">Ideas · scripts · shot lists</text>
+        <text x="288" y="530" class="s-meta">Insight digest từ E</text>
+
+        <rect x="508" y="475" width="222" height="68" rx="8" class="s-box"/>
+        <text x="522" y="496" class="s-lbl">Metrics DB</text>
+        <text x="522" y="513" class="s-meta">View · retention · CTR · saves</text>
+        <text x="522" y="530" class="s-meta">Benchmark (absolute threshold)</text>
+
+        <rect x="742" y="475" width="218" height="68" rx="8" class="s-box"/>
+        <text x="756" y="496" class="s-lbl">Render Output</text>
+        <text x="756" y="513" class="s-meta">MP4 40–55s · caption</text>
+        <text x="756" y="530" class="s-meta">Hashtag #VNG #VNGCampus</text>
+
+        <path d="M 127 394 L 127 475" class="s-flow-l"/>
+        <path d="M 313 394 L 313 475" class="s-flow-l"/>
+        <path d="M 499 394 L 499 475" class="s-flow-l"/>
+        <path d="M 685 394 L 685 475" class="s-flow-l"/>
+        <path d="M 851 394 L 619 475" class="s-flow-l"/>
+
+        <!-- LAYER 5 — EXTERNAL -->
+        <text x="40" y="575" class="s-h">External Services</text>
+        <rect x="40" y="585" width="222" height="64" rx="8" class="s-box"/>
+        <text x="54" y="606" class="s-lbl">TikTok API</text>
+        <text x="54" y="623" class="s-meta">Post + Insights · used by D</text>
+        <text x="54" y="640" class="s-meta">(xin access từ Day 0 — lead-time)</text>
+
+        <rect x="274" y="585" width="222" height="64" rx="8" class="s-box"/>
+        <text x="288" y="606" class="s-lbl">Apify / Scrapers</text>
+        <text x="288" y="623" class="s-meta">Trend scrape · used by A, D</text>
+        <text x="288" y="640" class="s-meta">Fallback metric pull</text>
+
+        <rect x="508" y="585" width="222" height="64" rx="8" class="s-box"/>
+        <text x="522" y="606" class="s-lbl">LLM — Claude Opus 4.8</text>
+        <text x="522" y="623" class="s-meta">Idea · script · analysis</text>
+        <text x="522" y="640" class="s-meta">used by B, E (+ A research)</text>
+
+        <rect x="742" y="585" width="218" height="64" rx="8" class="s-box"/>
+        <text x="756" y="606" class="s-lbl">TTS Engine</text>
+        <text x="756" y="623" class="s-meta">Vietnamese voice · tone hài</text>
+        <text x="756" y="640" class="s-meta">ElevenLabs / VietTTS — used by C</text>
+
+        <!-- ABSOLUTE GATE -->
+        <rect x="510" y="680" width="450" height="100" rx="8" class="s-box-gate"/>
+        <text x="525" y="700" class="s-lbl">Absolute Gate — 2 phanh (điểm wow của hệ thống)</text>
+        <text x="525" y="720" class="s-meta">passA = top 20% của lô  ·  passB = vượt ngưỡng tuyệt đối</text>
+        <text x="525" y="738" class="s-meta">SCALE = passA ∧ passB   ·   MONITOR = passA ∨ passB</text>
+        <text x="525" y="754" class="s-meta">KILL = không đạt cả hai → chặn lỗi "scale best of a bad batch"</text>
+        <text x="525" y="772" class="s-meta">Agent đề xuất → Human bấm xác nhận (AI execute + learn · Human decide)</text>
+
+        <!-- LEGEND inside SVG -->
+        <text x="40" y="700" class="s-h">Flow legend</text>
+        <line x1="40" y1="718" x2="92" y2="718" class="s-flow" marker-end="url(#ar)"/>
+        <text x="100" y="722" class="s-meta">Pipeline data flow (A → B → C → D → E)</text>
+        <line x1="40" y1="740" x2="92" y2="740" class="s-feedback" marker-end="url(#aro)"/>
+        <text x="100" y="744" class="s-meta">Self-learning feedback (E → B)</text>
+        <line x1="40" y1="762" x2="92" y2="762" class="s-human" marker-end="url(#arb)"/>
+        <text x="100" y="766" class="s-meta">Human-in-the-loop (config · approve scale)</text>
+        <line x1="40" y1="784" x2="92" y2="784" class="s-flow-l"/>
+        <text x="100" y="788" class="s-meta">Orchestration / storage reads + writes</text>
+
+        <text x="500" y="850" class="s-subtitle" text-anchor="middle">Brand: VNG Insider — Đời sống ở VNG · @vng.insider · cam #EE5723 · 3 mảng: Campus · Cách vào VNG · BU</text>
+      </svg>
+
+      <div class="notes">
+        <div class="note">
+          <div class="tag">ORIGINAL PRINCIPLE</div>
+          <b>AI execute + learn · Human decide.</b> Agent chỉ đề xuất nhân rộng, người bấm xác nhận. Không bao giờ tự động scale.
+        </div>
+        <div class="note">
+          <div class="tag">ABSOLUTE GATE</div>
+          <b>Hai phanh tránh "best of a bad batch".</b> Top 20% lô <i>và</i> vượt ngưỡng tuyệt đối — cả lô lỗ thì không scale cái "đỡ lỗ nhất".
+        </div>
+        <div class="note">
+          <div class="tag">2 NGUỒN HỌC</div>
+          <b>Trend ngoài (A · tuần)</b> + <b>insight nội bộ (E · ngày)</b> đều đổ về Creative Brain — vòng sau giỏi hơn vòng trước.
+        </div>
+        <div class="note">
+          <div class="tag">FALLBACK</div>
+          TikTok API duyệt lâu → Publisher xuất file + caption, human bấm đăng tay (vẫn đúng "Human decide").
+        </div>
+      </div>
+    </div>
+
+    <footer>
+      File: <code>architecture.html</code> · mở bằng browser hoặc <code>python3 -m http.server 8000</code> rồi truy cập <code>http://localhost:8000/architecture.html</code>
+    </footer>
+  </main>
+</body>
+</html>

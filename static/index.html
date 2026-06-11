@@ -1,0 +1,817 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>VNG Insider · Clip Warehouse</title>
+<style>
+  :root {
+    --vng: #EE5723;
+    --vng-soft: #FFF1EB;
+    --vng-deep: #c8431a;
+    --bg: #fafaf9;
+    --surface: #ffffff;
+    --surface-2: #f6f6f5;
+    --border: #e5e5e5;
+    --text-1: #111;
+    --text-2: #5a5a5a;
+    --text-3: #999;
+    --danger: #c0392b;
+    --success: #16a34a;
+    --info: #2563eb;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--bg); color: var(--text-1); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 32px 24px 140px; }
+
+  header { display: flex; align-items: baseline; gap: 12px; margin-bottom: 6px; flex-wrap: wrap; }
+  h1 { font-size: 22px; margin: 0; }
+  .badge { background: var(--vng); color: white; padding: 3px 10px; border-radius: 999px; font-size: 11px; font-weight: 700; letter-spacing: 0.5px; }
+  .sub { color: var(--text-2); margin-bottom: 24px; font-size: 14px; }
+
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 20px; margin-bottom: 14px; }
+  .card h2 { font-size: 11px; margin: 0 0 14px; text-transform: uppercase; letter-spacing: 0.6px; color: var(--text-3); font-weight: 700; }
+
+  .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .row > * { flex: 0 0 auto; }
+
+  /* Form fields */
+  label.field { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-3); margin-bottom: 4px; font-weight: 600; }
+  input[type=text], input[type=file], select, textarea {
+    font: inherit; padding: 9px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); color: var(--text-1); width: 100%;
+  }
+  input[type=text]:focus, select:focus, textarea:focus { outline: 2px solid var(--vng); outline-offset: -1px; border-color: transparent; }
+  textarea { min-height: 56px; resize: vertical; }
+  .form-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+  .form-grid .full { grid-column: 1 / -1; }
+  .form-actions { margin-top: 14px; display: flex; gap: 10px; justify-content: flex-end; }
+  .form-hint { font-size: 11px; color: var(--text-3); margin-top: 4px; }
+
+  /* Buttons */
+  button { font: inherit; font-weight: 600; padding: 9px 16px; border-radius: 8px; border: 1px solid transparent; cursor: pointer; background: var(--vng); color: white; transition: opacity 0.15s; }
+  button:hover:not(:disabled) { opacity: 0.92; }
+  button:disabled { opacity: 0.45; cursor: not-allowed; }
+  button.secondary { background: var(--surface); color: var(--text-1); border-color: var(--border); }
+  button.ghost { background: transparent; color: var(--text-2); padding: 4px 8px; font-size: 12px; font-weight: 500; border-color: transparent; }
+  button.ghost:hover { color: var(--text-1); }
+  button.danger-ghost { background: transparent; color: var(--danger); padding: 4px 8px; font-size: 12px; font-weight: 500; border-color: transparent; }
+  button.danger-ghost:hover { border-color: var(--danger); }
+  button.small { padding: 4px 8px; font-size: 12px; }
+
+  /* Categories — tag-style: compact, flat, accent màu mềm */
+  .cat-list {
+    display: flex; gap: 6px; flex-wrap: wrap;
+    margin-bottom: 12px;
+  }
+  .cat-pill {
+    display: inline-flex; align-items: center; gap: 7px;
+    height: 26px;
+    box-sizing: border-box;
+    padding: 0 10px;
+    background: rgba(238, 87, 35, 0.09);
+    color: var(--vng-deep);
+    border: 1px solid transparent;
+    border-radius: 6px;
+    font-size: 12px; font-weight: 500; line-height: 1;
+    transition: background 0.12s ease, border-color 0.12s ease;
+    user-select: none;
+    cursor: default;
+  }
+  .cat-pill:hover {
+    background: rgba(238, 87, 35, 0.16);
+    border-color: rgba(238, 87, 35, 0.35);
+  }
+  .cat-pill.empty {
+    background: rgba(0, 0, 0, 0.045);
+    color: var(--text-3);
+  }
+  .cat-pill.empty:hover {
+    background: rgba(0, 0, 0, 0.075);
+    border-color: var(--border);
+  }
+  .cat-pill .cnt {
+    font-size: 11px; font-weight: 600;
+    opacity: 0.55;
+    font-variant-numeric: tabular-nums;
+  }
+  .cat-pill .cat-actions {
+    display: inline-flex; gap: 1px; margin-left: 2px;
+    opacity: 0;
+    transition: opacity 0.12s ease;
+  }
+  .cat-pill:hover .cat-actions { opacity: 0.85; }
+  .cat-pill .cat-actions button {
+    all: unset;
+    cursor: pointer;
+    width: 16px; height: 16px;
+    display: inline-flex; align-items: center; justify-content: center;
+    border-radius: 3px;
+    font-size: 10px;
+    color: inherit;
+    opacity: 0.7;
+  }
+  .cat-pill .cat-actions button:hover {
+    background: rgba(0, 0, 0, 0.1);
+    opacity: 1;
+  }
+
+  .new-cat-form { margin-top: 12px; padding: 14px; border: 1px dashed var(--border); border-radius: 10px; background: var(--surface-2); }
+  .new-cat-form.hidden { display: none; }
+
+  /* Filter */
+  .filter-bar { display: flex; gap: 12px; align-items: center; margin-bottom: 14px; flex-wrap: wrap; }
+  .filter-bar select { width: auto; min-width: 220px; }
+
+  /* List table */
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: 0.6px; color: var(--text-3); border-bottom: 1px solid var(--border); padding: 9px 6px; font-weight: 700; }
+  td { padding: 10px 6px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+  tr:hover td { background: var(--surface-2); cursor: pointer; }
+  tr.selected td { background: var(--vng-soft); }
+  td.center { text-align: center; }
+  td.nowrap { white-space: nowrap; }
+  td input[type=checkbox] { width: 17px; height: 17px; cursor: pointer; accent-color: var(--vng); }
+
+  .order-badge { display: inline-block; background: var(--vng); color: white; font-weight: 700; padding: 2px 8px; border-radius: 999px; font-size: 11px; min-width: 22px; text-align: center; }
+  .category-tag { display: inline-block; background: var(--vng-soft); color: var(--vng-deep); padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; cursor: pointer; }
+  .clip-id { font-family: ui-monospace, SFMono-Regular, monospace; font-size: 12px; color: var(--text-2); }
+  .file-title { font-weight: 600; font-size: 13px; max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .desc { font-size: 11px; color: var(--text-2); margin-top: 2px; max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  .empty { color: var(--text-3); text-align: center; padding: 40px 12px; font-size: 14px; }
+
+  /* Action bar (sticky concat) */
+  .action-bar { position: fixed; left: 50%; transform: translateX(-50%); bottom: 24px; background: var(--surface); border: 1.5px solid var(--vng); border-radius: 12px; padding: 12px 16px; display: flex; gap: 12px; align-items: center; box-shadow: 0 8px 28px rgba(238,87,35,0.18); z-index: 10; }
+  .action-bar.hidden { display: none; }
+  .action-bar .count { background: var(--vng); color: white; padding: 2px 10px; border-radius: 999px; font-weight: 700; font-size: 13px; }
+
+  /* Result */
+  .result { background: var(--vng-soft); border: 1px solid var(--vng); border-radius: 10px; padding: 14px 18px; margin-top: 12px; font-size: 13px; }
+  .result.error { background: #fdecea; border-color: var(--danger); color: var(--danger); }
+  .result a { color: var(--vng); font-weight: 700; word-break: break-all; }
+  .result code { background: rgba(0,0,0,0.05); padding: 2px 6px; border-radius: 4px; font-size: 12px; word-break: break-all; }
+
+  /* Modal */
+  .backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 50; display: flex; align-items: center; justify-content: center; padding: 24px; }
+  .backdrop.hidden { display: none; }
+  .modal { background: var(--surface); border-radius: 14px; padding: 24px; width: 100%; max-width: 560px; max-height: 90vh; overflow-y: auto; }
+  .modal h3 { margin: 0 0 4px; font-size: 16px; }
+  .modal .modal-sub { color: var(--text-3); font-size: 12px; margin-bottom: 18px; font-family: ui-monospace, SFMono-Regular, monospace; }
+
+  /* Toast */
+  .toast { position: fixed; top: 20px; right: 20px; background: var(--text-1); color: white; padding: 10px 16px; border-radius: 8px; font-size: 13px; z-index: 100; animation: slideIn 0.2s ease-out; box-shadow: 0 4px 16px rgba(0,0,0,0.2); }
+  .toast.error { background: var(--danger); }
+  .toast.success { background: var(--success); }
+  @keyframes slideIn { from { transform: translateX(20px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+
+  /* Import button cụm */
+  .import-card { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .import-card .desc-block { flex: 1; min-width: 220px; font-size: 12px; color: var(--text-2); }
+
+  .yn { font-weight: 700; }
+  .yn.yes { color: var(--success); }
+  .yn.no { color: var(--text-3); }
+
+  /* Resolution badge */
+  .resolution { font-family: ui-monospace, SFMono-Regular, monospace; font-size: 11px; color: var(--text-2); }
+</style>
+</head>
+<body>
+<main class="wrap">
+  <header>
+    <h1>Clip Warehouse</h1>
+    <span class="badge">VNG INSIDER</span>
+  </header>
+  <div class="sub">Postgres · MinIO · ffmpeg · 32 clip từ data_raw</div>
+
+  <!-- Card: Categories -->
+  <section class="card" id="categoriesCard">
+    <h2>1. Categories <span id="catCountLabel" style="opacity:0.6"></span></h2>
+    <div class="cat-list" id="catList"></div>
+
+    <button class="secondary small" id="toggleNewCatBtn">+ Tạo category mới</button>
+
+    <div class="new-cat-form hidden" id="newCatForm">
+      <div class="form-grid">
+        <div>
+          <label class="field">Name (slug)</label>
+          <input type="text" id="newCatName" placeholder="vd: 12_team_party" />
+          <div class="form-hint">a-z 0-9 underscore. Vd: <code>12_team_party</code></div>
+        </div>
+        <div>
+          <label class="field">Label (hiển thị)</label>
+          <input type="text" id="newCatLabel" placeholder="Team party" />
+        </div>
+        <div>
+          <label class="field">Default clip tag</label>
+          <input type="text" id="newCatTag" placeholder="auto từ name nếu để trống" />
+        </div>
+        <div>
+          <label class="field">Description</label>
+          <input type="text" id="newCatDesc" placeholder="(optional)" />
+        </div>
+      </div>
+      <div class="form-actions">
+        <button class="secondary" id="cancelNewCatBtn">Huỷ</button>
+        <button id="createCatBtn">Tạo</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- Card: Import from data_raw -->
+  <section class="card import-card">
+    <h2 style="margin: 0">Import data_raw</h2>
+    <div class="desc-block">
+      Re-import từ <code>data_raw/00_INDEX.json</code>. Idempotent — chạy lại bao nhiêu lần cũng không trùng.
+    </div>
+    <button id="importBtn" class="secondary">Import</button>
+  </section>
+
+  <!-- Card: Upload -->
+  <section class="card">
+    <h2>2. Upload clip mới</h2>
+    <div class="form-grid">
+      <div>
+        <label class="field">File</label>
+        <input type="file" id="upFile" accept="video/*" />
+      </div>
+      <div>
+        <label class="field">Category</label>
+        <select id="upCategory">
+          <option value="">— chọn category —</option>
+        </select>
+        <div class="form-hint">Chưa có category? Tạo ở card 1 trước.</div>
+      </div>
+      <div>
+        <label class="field">Clip tag</label>
+        <input type="text" id="upTag" placeholder="auto từ category" />
+      </div>
+      <div>
+        <label class="field">Mood</label>
+        <input type="text" id="upMood" list="moodList" placeholder="yên tĩnh, năng động..." />
+        <datalist id="moodList"></datalist>
+      </div>
+      <div class="full">
+        <label class="field">Description</label>
+        <textarea id="upDesc" placeholder="Mô tả nội dung clip"></textarea>
+      </div>
+      <div>
+        <label class="field">Có người trong clip?</label>
+        <div style="padding: 9px 0;">
+          <input type="checkbox" id="upHasPeople" style="vertical-align: middle;" />
+          <label for="upHasPeople" style="font-size: 13px; cursor: pointer;">Có người</label>
+        </div>
+      </div>
+      <div>
+        <label class="field">People note</label>
+        <input type="text" id="upPeopleNote" placeholder="vd: 2 người đi ngang" value="không" />
+      </div>
+      <div class="full">
+        <label class="field">Notes</label>
+        <textarea id="upNotes" placeholder="(optional)"></textarea>
+      </div>
+    </div>
+    <div class="form-actions">
+      <button id="uploadBtn">Tải lên</button>
+    </div>
+  </section>
+
+  <!-- Card: Video list -->
+  <section class="card">
+    <h2>3. Kho clip <span id="videoCountLabel" style="opacity:0.6"></span></h2>
+    <div class="filter-bar">
+      <label style="font-size: 12px; color: var(--text-2);">Filter:</label>
+      <select id="filterCategory">
+        <option value="">Tất cả</option>
+      </select>
+    </div>
+    <div id="list"></div>
+  </section>
+
+  <div id="result"></div>
+</main>
+
+<!-- Sticky concat bar -->
+<div class="action-bar hidden" id="actionBar">
+  <span class="count" id="selectedCount">0</span>
+  <span style="font-size: 13px;">clip đã chọn (theo thứ tự tick)</span>
+  <button class="secondary" id="clearBtn">Bỏ chọn</button>
+  <button id="concatBtn">Ghép video →</button>
+</div>
+
+<!-- Modal: edit video -->
+<div class="backdrop hidden" id="editModal">
+  <div class="modal">
+    <h3>Sửa metadata video</h3>
+    <div class="modal-sub" id="editVidId"></div>
+    <div class="form-grid">
+      <div>
+        <label class="field">Category</label>
+        <select id="editCategory"></select>
+      </div>
+      <div>
+        <label class="field">Clip tag</label>
+        <input type="text" id="editTag" />
+      </div>
+      <div class="full">
+        <label class="field">Description</label>
+        <textarea id="editDesc"></textarea>
+      </div>
+      <div>
+        <label class="field">Mood</label>
+        <input type="text" id="editMood" list="moodList" />
+      </div>
+      <div>
+        <label class="field">Has people</label>
+        <div style="padding: 9px 0;">
+          <input type="checkbox" id="editHasPeople" />
+        </div>
+      </div>
+      <div class="full">
+        <label class="field">People note</label>
+        <input type="text" id="editPeopleNote" />
+      </div>
+      <div class="full">
+        <label class="field">Notes</label>
+        <textarea id="editNotes"></textarea>
+      </div>
+    </div>
+    <div class="form-actions">
+      <button class="secondary" id="cancelEditBtn">Huỷ</button>
+      <button id="saveEditBtn">Lưu</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: edit category -->
+<div class="backdrop hidden" id="editCatModal">
+  <div class="modal">
+    <h3>Sửa category</h3>
+    <div class="modal-sub" id="editCatName"></div>
+    <div class="form-grid">
+      <div>
+        <label class="field">Label</label>
+        <input type="text" id="editCatLabel" />
+      </div>
+      <div>
+        <label class="field">Default tag</label>
+        <input type="text" id="editCatTag" />
+      </div>
+      <div class="full">
+        <label class="field">Description</label>
+        <textarea id="editCatDesc"></textarea>
+      </div>
+    </div>
+    <div class="form-actions">
+      <button class="secondary" id="cancelEditCatBtn">Huỷ</button>
+      <button id="saveEditCatBtn">Lưu</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ─── State ───────────────────────────────────────────────────────────────────
+let categories = [];           // [{name, label, default_tag, description, video_count}]
+let videos = [];               // current filtered list
+let allVideos = [];            // unfiltered, for cross-filter selection
+let selectedOrder = [];        // ordered video IDs
+let activeFilter = "";         // current category filter
+let editingVideoId = null;
+let editingCatName = null;
+
+const $ = (id) => document.getElementById(id);
+const esc = (s) => (s == null ? '' : String(s)).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+function fmtDuration(sec) {
+  if (!sec) return '—';
+  const m = Math.floor(sec / 60), s = Math.floor(sec % 60);
+  return `${m}:${s.toString().padStart(2, '0')}`;
+}
+function fmtDate(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  return d.toLocaleString('vi-VN', { dateStyle: 'short', timeStyle: 'short' });
+}
+
+function toast(msg, type = '') {
+  const t = document.createElement('div');
+  t.className = 'toast ' + type;
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), 2800);
+}
+
+// ─── Fetch helpers ───────────────────────────────────────────────────────────
+async function loadCategories() {
+  const res = await fetch('/api/categories');
+  categories = await res.json();
+  renderCategories();
+  renderCategoryDropdowns();
+}
+
+async function loadVideos() {
+  const url = activeFilter ? `/api/videos?category=${encodeURIComponent(activeFilter)}` : '/api/videos';
+  const res = await fetch(url);
+  videos = await res.json();
+  if (!activeFilter) allVideos = videos;
+  renderVideos();
+  renderMoodList();
+}
+
+// ─── Renderers ───────────────────────────────────────────────────────────────
+function renderCategories() {
+  const total = categories.reduce((s, c) => s + Number(c.video_count || 0), 0);
+  $('catCountLabel').textContent = `· ${categories.length} category · ${total} video`;
+
+  $('catList').innerHTML = categories.map(c => {
+    const isEmpty = Number(c.video_count) === 0;
+    return `
+      <span class="cat-pill ${isEmpty ? 'empty' : ''}" title="${esc(c.description || '')}">
+        <span>${esc(c.name)}</span>
+        <span class="cnt">${c.video_count}</span>
+        <span class="cat-actions">
+          <button title="Sửa" onclick="openEditCategory('${esc(c.name)}')">✎</button>
+          <button title="Xoá" onclick="deleteCategory('${esc(c.name)}')">✕</button>
+        </span>
+      </span>
+    `;
+  }).join('');
+}
+
+function renderCategoryDropdowns() {
+  const opts = categories.map(c => {
+    const label = c.label ? `${c.name} — ${c.label}` : c.name;
+    return `<option value="${esc(c.name)}">${esc(label)} (${c.video_count})</option>`;
+  }).join('');
+
+  // Upload form dropdown
+  const upSel = $('upCategory');
+  const upPrev = upSel.value;
+  upSel.innerHTML = '<option value="">— chọn category —</option>' + opts;
+  if (upPrev) upSel.value = upPrev;
+
+  // Edit modal dropdown
+  $('editCategory').innerHTML = opts;
+
+  // Filter dropdown
+  const fSel = $('filterCategory');
+  const fPrev = fSel.value;
+  fSel.innerHTML = `<option value="">Tất cả (${categories.reduce((s, c) => s + Number(c.video_count), 0)})</option>` +
+                   categories.map(c => `<option value="${esc(c.name)}">${esc(c.name)} (${c.video_count})</option>`).join('');
+  if (fPrev) fSel.value = fPrev;
+}
+
+function renderMoodList() {
+  const set = new Set(allVideos.map(v => v.mood).filter(Boolean));
+  $('moodList').innerHTML = [...set].sort().map(m => `<option value="${esc(m)}">`).join('');
+}
+
+function renderVideos() {
+  $('videoCountLabel').textContent = `· ${videos.length} video${activeFilter ? ' (filtered)' : ''}`;
+
+  if (videos.length === 0) {
+    $('list').innerHTML = '<div class="empty">Chưa có video nào.</div>';
+    updateActionBar();
+    return;
+  }
+
+  const rows = videos.map(v => {
+    const orderIdx = selectedOrder.indexOf(v.id);
+    const checked = orderIdx >= 0 ? 'checked' : '';
+    const orderBadge = orderIdx >= 0 ? `<span class="order-badge">${orderIdx + 1}</span>` : '';
+    const selCls = orderIdx >= 0 ? 'selected' : '';
+    const peopleBadge = v.has_people
+      ? `<span class="yn yes">✓</span> <span class="desc" style="display:inline">${esc(v.people_note_raw || '')}</span>`
+      : `<span class="yn no">✗</span>`;
+    return `
+      <tr class="${selCls}" data-id="${v.id}">
+        <td class="center" onclick="event.stopPropagation()"><input type="checkbox" data-id="${v.id}" ${checked} onclick="toggle('${v.id}'); event.stopPropagation()"></td>
+        <td class="center">${orderBadge}</td>
+        <td>
+          <div class="clip-id">${esc(v.id)}</div>
+          <div class="file-title" title="${esc(v.file)}">${esc(v.file)}</div>
+          <div class="desc" title="${esc(v.description)}">${esc(v.description || '—')}</div>
+        </td>
+        <td><span class="category-tag" onclick="filterCategory('${esc(v.category)}'); event.stopPropagation()">${esc(v.category)}</span></td>
+        <td>${esc(v.clip_tag)}</td>
+        <td>${esc(v.mood || '—')}</td>
+        <td class="center">${peopleBadge}</td>
+        <td class="resolution nowrap">${esc(v.resolution || '—')}</td>
+        <td class="nowrap">${fmtDuration(v.duration_sec)}</td>
+        <td class="nowrap">${fmtDate(v.uploaded_at)}</td>
+        <td class="center" onclick="event.stopPropagation()"><button class="danger-ghost" onclick="deleteVideo('${v.id}'); event.stopPropagation()">Xoá</button></td>
+      </tr>
+    `;
+  }).join('');
+
+  $('list').innerHTML = `
+    <div style="overflow-x: auto;">
+    <table>
+      <thead><tr>
+        <th></th><th></th>
+        <th>ID · File · Description</th>
+        <th>Category</th>
+        <th>Tag</th>
+        <th>Mood</th>
+        <th>People</th>
+        <th>Resolution</th>
+        <th>Dur</th>
+        <th>Uploaded</th>
+        <th></th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+    </div>
+  `;
+
+  // Click row to edit (handler via event delegation on tbody)
+  $('list').querySelectorAll('tbody tr').forEach(tr => {
+    tr.addEventListener('click', () => openEditVideo(tr.dataset.id));
+  });
+
+  updateActionBar();
+}
+
+function updateActionBar() {
+  $('selectedCount').textContent = selectedOrder.length;
+  $('actionBar').classList.toggle('hidden', selectedOrder.length < 2);
+}
+
+// ─── Toggle / select ────────────────────────────────────────────────────────
+function toggle(id) {
+  const idx = selectedOrder.indexOf(id);
+  if (idx >= 0) selectedOrder.splice(idx, 1);
+  else selectedOrder.push(id);
+  renderVideos();
+}
+
+function filterCategory(name) {
+  activeFilter = name;
+  $('filterCategory').value = name;
+  loadVideos();
+}
+
+// ─── Category CRUD ──────────────────────────────────────────────────────────
+$('toggleNewCatBtn').onclick = () => $('newCatForm').classList.toggle('hidden');
+$('cancelNewCatBtn').onclick = () => $('newCatForm').classList.add('hidden');
+
+$('createCatBtn').onclick = async () => {
+  const name = $('newCatName').value.trim();
+  const label = $('newCatLabel').value.trim() || null;
+  const default_tag = $('newCatTag').value.trim() || null;
+  const description = $('newCatDesc').value.trim();
+  if (!name) { toast('Cần điền name', 'error'); return; }
+  if (!/^[a-z0-9_]+$/.test(name)) {
+    toast('Name chỉ a-z 0-9 underscore', 'error');
+    return;
+  }
+  try {
+    const res = await fetch('/api/categories', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, label, default_tag, description }),
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.detail || 'Failed');
+    }
+    toast('Đã tạo category ' + name, 'success');
+    $('newCatName').value = '';
+    $('newCatLabel').value = '';
+    $('newCatTag').value = '';
+    $('newCatDesc').value = '';
+    $('newCatForm').classList.add('hidden');
+    await loadCategories();
+  } catch (e) {
+    toast('Lỗi: ' + e.message, 'error');
+  }
+};
+
+function openEditCategory(name) {
+  const c = categories.find(x => x.name === name);
+  if (!c) return;
+  editingCatName = name;
+  $('editCatName').textContent = name;
+  $('editCatLabel').value = c.label || '';
+  $('editCatTag').value = c.default_tag || '';
+  $('editCatDesc').value = c.description || '';
+  $('editCatModal').classList.remove('hidden');
+}
+window.openEditCategory = openEditCategory;
+
+$('cancelEditCatBtn').onclick = () => $('editCatModal').classList.add('hidden');
+
+$('saveEditCatBtn').onclick = async () => {
+  if (!editingCatName) return;
+  try {
+    const res = await fetch('/api/categories/' + encodeURIComponent(editingCatName), {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        label: $('editCatLabel').value.trim() || null,
+        default_tag: $('editCatTag').value.trim() || null,
+        description: $('editCatDesc').value.trim(),
+      }),
+    });
+    if (!res.ok) throw new Error((await res.json()).detail || 'Failed');
+    toast('Đã lưu', 'success');
+    $('editCatModal').classList.add('hidden');
+    await loadCategories();
+  } catch (e) {
+    toast('Lỗi: ' + e.message, 'error');
+  }
+};
+
+async function deleteCategory(name) {
+  const c = categories.find(x => x.name === name);
+  if (!confirm(`Xoá category "${name}"? (${c?.video_count || 0} video)`)) return;
+  try {
+    const res = await fetch('/api/categories/' + encodeURIComponent(name), { method: 'DELETE' });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.detail || 'Delete failed');
+    }
+    toast('Đã xoá category', 'success');
+    await loadCategories();
+  } catch (e) {
+    toast(e.message, 'error');
+  }
+}
+window.deleteCategory = deleteCategory;
+
+// ─── Upload ──────────────────────────────────────────────────────────────────
+$('upCategory').onchange = () => {
+  const name = $('upCategory').value;
+  const c = categories.find(x => x.name === name);
+  if (c && !$('upTag').value.trim()) $('upTag').value = c.default_tag || '';
+};
+
+$('uploadBtn').onclick = async () => {
+  const file = $('upFile').files[0];
+  const category = $('upCategory').value;
+  const clip_tag = $('upTag').value.trim();
+  if (!file) { toast('Chọn file', 'error'); return; }
+  if (!category) { toast('Chọn category', 'error'); return; }
+  if (!clip_tag) { toast('Cần clip tag', 'error'); return; }
+
+  const btn = $('uploadBtn');
+  btn.disabled = true; btn.textContent = 'Đang tải...';
+
+  const fd = new FormData();
+  fd.append('file', file);
+  fd.append('category', category);
+  fd.append('clip_tag', clip_tag);
+  fd.append('description', $('upDesc').value);
+  fd.append('mood', $('upMood').value);
+  fd.append('has_people', $('upHasPeople').checked ? 'true' : 'false');
+  fd.append('people_note_raw', $('upPeopleNote').value);
+  fd.append('notes', $('upNotes').value);
+
+  try {
+    const res = await fetch('/api/videos', { method: 'POST', body: fd });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.detail || 'Upload failed');
+    }
+    toast('Upload OK', 'success');
+    // Reset form
+    $('upFile').value = '';
+    $('upDesc').value = '';
+    $('upMood').value = '';
+    $('upHasPeople').checked = false;
+    $('upPeopleNote').value = 'không';
+    $('upNotes').value = '';
+    await Promise.all([loadCategories(), loadVideos()]);
+  } catch (e) {
+    toast('Lỗi: ' + e.message, 'error');
+  } finally {
+    btn.disabled = false; btn.textContent = 'Tải lên';
+  }
+};
+
+// ─── Edit video ──────────────────────────────────────────────────────────────
+function openEditVideo(id) {
+  const v = videos.find(x => x.id === id) || allVideos.find(x => x.id === id);
+  if (!v) return;
+  editingVideoId = id;
+  $('editVidId').textContent = id + ' · ' + v.file;
+  $('editCategory').value = v.category;
+  $('editTag').value = v.clip_tag;
+  $('editDesc').value = v.description || '';
+  $('editMood').value = v.mood || '';
+  $('editHasPeople').checked = !!v.has_people;
+  $('editPeopleNote').value = v.people_note_raw || '';
+  $('editNotes').value = v.notes || '';
+  $('editModal').classList.remove('hidden');
+}
+window.openEditVideo = openEditVideo;
+
+$('cancelEditBtn').onclick = () => $('editModal').classList.add('hidden');
+
+$('saveEditBtn').onclick = async () => {
+  if (!editingVideoId) return;
+  try {
+    const res = await fetch('/api/videos/' + editingVideoId, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        category: $('editCategory').value,
+        clip_tag: $('editTag').value.trim(),
+        description: $('editDesc').value,
+        mood: $('editMood').value,
+        has_people: $('editHasPeople').checked,
+        people_note_raw: $('editPeopleNote').value,
+        notes: $('editNotes').value,
+      }),
+    });
+    if (!res.ok) throw new Error((await res.json()).detail || 'Failed');
+    toast('Đã lưu', 'success');
+    $('editModal').classList.add('hidden');
+    await Promise.all([loadCategories(), loadVideos()]);
+  } catch (e) {
+    toast('Lỗi: ' + e.message, 'error');
+  }
+};
+
+async function deleteVideo(id) {
+  if (!confirm('Xoá video này?')) return;
+  try {
+    const res = await fetch('/api/videos/' + id, { method: 'DELETE' });
+    if (!res.ok) throw new Error('Delete failed');
+    selectedOrder = selectedOrder.filter(x => x !== id);
+    await Promise.all([loadCategories(), loadVideos()]);
+    toast('Đã xoá', 'success');
+  } catch (e) {
+    toast('Lỗi: ' + e.message, 'error');
+  }
+}
+window.deleteVideo = deleteVideo;
+
+// ─── Import ──────────────────────────────────────────────────────────────────
+$('importBtn').onclick = async () => {
+  const btn = $('importBtn');
+  btn.disabled = true; btn.textContent = 'Đang import...';
+  try {
+    const res = await fetch('/api/import-data-raw', { method: 'POST' });
+    if (!res.ok) throw new Error((await res.json()).detail || 'Failed');
+    const r = await res.json();
+    toast(`Categories +${r.categories_upserted} · Videos +${r.videos_imported} · Skipped ${r.videos_skipped}`, 'success');
+    await Promise.all([loadCategories(), loadVideos()]);
+  } catch (e) {
+    toast('Lỗi: ' + e.message, 'error');
+  } finally {
+    btn.disabled = false; btn.textContent = 'Import';
+  }
+};
+
+// ─── Filter ──────────────────────────────────────────────────────────────────
+$('filterCategory').onchange = () => {
+  activeFilter = $('filterCategory').value;
+  loadVideos();
+};
+
+// ─── Concat ──────────────────────────────────────────────────────────────────
+$('clearBtn').onclick = () => { selectedOrder = []; renderVideos(); };
+
+$('concatBtn').onclick = async () => {
+  if (selectedOrder.length < 2) return;
+  const btn = $('concatBtn');
+  btn.disabled = true; btn.textContent = 'Đang ghép...';
+  $('result').innerHTML = '';
+  try {
+    const res = await fetch('/api/concat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ video_ids: selectedOrder }),
+    });
+    if (!res.ok) throw new Error((await res.json()).detail || 'Concat failed');
+    const data = await res.json();
+    $('result').innerHTML = `
+      <div class="result">
+        ✅ Đã ghép <strong>${data.source_count}</strong> clip → <strong>${fmtDuration(data.duration_sec)}</strong>
+        <div style="margin-top: 10px;">
+          <a href="${data.output_url}" target="_blank" rel="noopener">▶ Xem / Download: ${data.output_name}</a>
+        </div>
+        <div style="margin-top: 6px;">Public link: <code>${data.output_url}</code></div>
+      </div>
+    `;
+    selectedOrder = [];
+    renderVideos();
+  } catch (e) {
+    $('result').innerHTML = `<div class="result error">❌ ${e.message}</div>`;
+  } finally {
+    btn.disabled = false; btn.textContent = 'Ghép video →';
+  }
+};
+
+window.toggle = toggle;
+window.filterCategory = filterCategory;
+
+// ─── Init ────────────────────────────────────────────────────────────────────
+(async () => {
+  await loadCategories();
+  await loadVideos();
+})();
+</script>
+</body>
+</html>
