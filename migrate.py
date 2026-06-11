@@ -16,9 +16,9 @@ from pathlib import Path
 
 from config import DATA_RAW_PATH
 from logger import setup_logging
-from video.db import init_db
-from video.importer import import_from_data_raw
-from video.storage import init_buckets
+from video_editor.db import init_db
+from video_editor.importer import import_from_data_raw
+from video_editor.storage import init_buckets
 
 
 def main() -> None:

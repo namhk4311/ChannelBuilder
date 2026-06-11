@@ -33,6 +33,10 @@ router = APIRouter(tags=["editor"])
 class ConcatRequest(BaseModel):
     video_ids: list[str]
     output_name: Optional[str] = None
+    # Brand guide VNG Insider: chỉ 1 lớp giọng lồng tiếng, KHÔNG nhạc nền,
+    # tắt hết tiếng clip gốc. Default True để khớp spec; cho phép override
+    # nếu sau này cần giữ tiếng gốc (vd: clip có lời người thật).
+    mute_source: bool = True
 
 
 @router.post("/api/concat")
@@ -40,8 +44,8 @@ def concat_videos(req: ConcatRequest):
     if len(req.video_ids) < 2:
         raise HTTPException(400, "Cần chọn ít nhất 2 video")
 
-    log.info("concat begin: %d clips → %s",
-             len(req.video_ids), req.output_name or "auto")
+    log.info("concat begin: %d clips → %s (mute_source=%s)",
+             len(req.video_ids), req.output_name or "auto", req.mute_source)
 
     # 1. Lookup object_name cho từng id
     with pg() as conn:
@@ -83,21 +87,30 @@ def concat_videos(req: ConcatRequest):
             output_basename += ".mp4"
         output_path = workdir / output_basename
 
-        t_ffmpeg = time.monotonic()
-        result = subprocess.run([
+        # Audio handling:
+        #   mute_source=True  → `-an` bỏ hẳn audio track (đúng brand guide).
+        #                       Sau này voice mux (TTS) sẽ thêm track mới.
+        #   mute_source=False → re-encode AAC giữ tiếng gốc (cho clip có lời thật).
+        audio_args = ["-an"] if req.mute_source else ["-c:a", "aac", "-b:a", "128k"]
+
+        cmd = [
             "ffmpeg", "-y",
             "-f", "concat", "-safe", "0",
             "-i", str(list_file),
             "-c:v", "libx264", "-preset", "fast", "-crf", "23",
-            "-c:a", "aac", "-b:a", "128k",
+            *audio_args,
             "-movflags", "+faststart",
             str(output_path),
-        ], capture_output=True, text=True)
+        ]
+        t_ffmpeg = time.monotonic()
+        result = subprocess.run(cmd, capture_output=True, text=True)
         if result.returncode != 0:
             log.error("ffmpeg failed (rc=%d): %s",
                       result.returncode, result.stderr[-300:])
             raise HTTPException(500, f"FFmpeg failed: {result.stderr[-500:]}")
-        log.info("ffmpeg done in %.2fs", time.monotonic() - t_ffmpeg)
+        log.info("ffmpeg done in %.2fs (audio: %s)",
+                 time.monotonic() - t_ffmpeg,
+                 "muted" if req.mute_source else "kept")
 
         # 5. Upload vào bucket outputs (public-read đã set ở init_buckets)
         minio_client.fput_object(
@@ -115,6 +128,7 @@ def concat_videos(req: ConcatRequest):
             "output_url": public_url,
             "source_count": len(req.video_ids),
             "duration_sec": out_duration,
+            "audio_muted": req.mute_source,
         }
     finally:
         shutil.rmtree(workdir, ignore_errors=True)

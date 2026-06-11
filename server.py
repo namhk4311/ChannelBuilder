@@ -24,12 +24,12 @@ from fastapi.staticfiles import StaticFiles
 
 from config import STATIC_DIR
 from logger import setup_logging
-from video.categories import router as categories_router
-from video.clips import router as clips_router
-from video.db import init_db
-from video.editor import router as editor_router
-from video.importer import router as importer_router
-from video.storage import init_buckets
+from video_editor.categories import router as categories_router
+from video_editor.clips import router as clips_router
+from video_editor.db import init_db
+from video_editor.editor import router as editor_router
+from video_editor.importer import router as importer_router
+from video_editor.storage import init_buckets
 
 # Setup logging ngay khi module load — uvicorn import server sẽ trigger
 setup_logging()
