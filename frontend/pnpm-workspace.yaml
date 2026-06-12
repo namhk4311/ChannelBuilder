@@ -1,0 +1,12 @@
+allowBuilds:
+  '@parcel/watcher': true
+  msw: true
+# pnpm workspace config — required by pnpm v10+ to host project-wide settings.
+# Single-package repo (no `packages:` entries needed).
+
+# Approve native packages that need to run install/build scripts.
+# pnpm v10+ blocks lifecycle scripts by default; v11 enforces stricter.
+onlyBuiltDependencies:
+  - '@resvg/resvg-js'
+  - '@tailwindcss/oxide'
+  - esbuild

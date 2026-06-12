@@ -1,1 +1,38 @@
 .venv/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Editors / tooling
+.vscode/
+.idea/
+.claude/
+
+# Env
+.env
+*.env.local
+.env.*.local
+
+# Frontend (Node / Vite)
+node_modules/
+dist/
+.vite/
+.turbo/
+coverage/
+
+# Backend (Python)
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Docker
+*.pid
