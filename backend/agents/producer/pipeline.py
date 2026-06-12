@@ -640,6 +640,7 @@ def produce_from_script(
     script: str,
     progress_cb: Optional[Callable[[int, str], None]] = None,
     subtitles: bool = True,
+    library: str = "vng_insider",
 ) -> dict:
     """
     Pipeline full 6 bước với log step-by-step + summary timing cuối.
@@ -802,7 +803,8 @@ def _run_job(job_id: str, script: str, subtitles: bool = True,
 
     JOBS[job_id]["status"] = "running"
     try:
-        result = produce_from_script(script, progress_cb=cb, subtitles=subtitles)
+        result = produce_from_script(script, progress_cb=cb, subtitles=subtitles,
+                                     library=library)
         JOBS[job_id].update(status="done", percent=100,
                             message="Hoàn tất ✓", result=result)
     except HTTPException as e:
