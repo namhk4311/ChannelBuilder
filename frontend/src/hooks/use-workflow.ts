@@ -1,0 +1,57 @@
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { decideGate, fetchAgents, fetchRun, fetchRuns, startRun, type WorkflowRun } from '@/api/workflow'
+
+const ACTIVE_STATUSES = ['running', 'awaiting_approval']
+
+export function useAgents() {
+  return useQuery({
+    queryKey: ['workflow', 'agents'],
+    queryFn: fetchAgents,
+    select: (d) => d.agents,
+    staleTime: 60_000,
+  })
+}
+
+export function useRuns() {
+  return useQuery({
+    queryKey: ['workflow', 'runs'],
+    queryFn: fetchRuns,
+    select: (d) => d.runs,
+  })
+}
+
+/** Poll run đang chạy mỗi 1.5s; dừng poll khi run kết thúc. */
+export function useRun(runId: string | null) {
+  return useQuery({
+    queryKey: ['workflow', 'run', runId],
+    queryFn: () => fetchRun(runId!),
+    enabled: !!runId,
+    refetchInterval: (query) => {
+      const status = query.state.data?.status
+      return status && ACTIVE_STATUSES.includes(status) ? 1500 : false
+    },
+  })
+}
+
+export function useStartRun(onStarted: (run: WorkflowRun) => void) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: startRun,
+    onSuccess: (run) => {
+      qc.invalidateQueries({ queryKey: ['workflow', 'runs'] })
+      onStarted(run)
+    },
+  })
+}
+
+export function useGateDecision(runId: string | null) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (approve: boolean) => decideGate(runId!, approve),
+    onSuccess: (run) => {
+      qc.setQueryData(['workflow', 'run', run.id], run)
+      qc.invalidateQueries({ queryKey: ['workflow', 'run', run.id] })
+      qc.invalidateQueries({ queryKey: ['workflow', 'runs'] })
+    },
+  })
+}

@@ -7,23 +7,32 @@ import { ErrorBoundary } from '@/components/error-boundary'
 import { LibraryPicker } from '@/components/library-picker'
 import StudioPage from '@/pages/studio'
 import WarehousePage from '@/pages/warehouse'
+import WorkflowPage from '@/pages/workflow'
 
 // Vite `base` (theo VITE_BASE_ROUTE) → router basename, deploy dưới subpath vẫn chạy.
 const BASENAME = import.meta.env.BASE_URL.replace(/\/+$/, '') || '/'
 
-/** Nav 2 section (Tabs sync router) + library picker dùng chung mọi trang. */
+const SECTION_PATHS: Record<string, string> = {
+  workflow: '/',
+  studio: '/studio',
+  warehouse: '/warehouse',
+}
+
+/** Nav 3 section (Tabs sync router) + library picker dùng chung mọi trang. */
 function ShellNav() {
   const location = useLocation()
   const navigate = useNavigate()
-  const section = location.pathname.startsWith('/warehouse') ? 'warehouse' : 'studio'
+  const section = location.pathname.startsWith('/warehouse')
+    ? 'warehouse'
+    : location.pathname.startsWith('/studio')
+      ? 'studio'
+      : 'workflow'
 
   return (
     <div className="flex flex-wrap items-center justify-between gap-3">
-      <Tabs
-        value={section}
-        onValueChange={(v) => navigate(v === 'warehouse' ? '/warehouse' : '/')}
-      >
+      <Tabs value={section} onValueChange={(v) => navigate(SECTION_PATHS[v] ?? '/')}>
         <TabsList>
+          <TabsTrigger value="workflow">Workflow</TabsTrigger>
           <TabsTrigger value="studio">Tạo video</TabsTrigger>
           <TabsTrigger value="warehouse">Kho clip</TabsTrigger>
         </TabsList>
@@ -42,7 +51,8 @@ export default function App() {
             <div className="mx-auto max-w-7xl space-y-6 md:space-y-8">
               <ShellNav />
               <Routes>
-                <Route index element={<StudioPage />} />
+                <Route index element={<WorkflowPage />} />
+                <Route path="studio" element={<StudioPage />} />
                 <Route path="warehouse" element={<WarehousePage />} />
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>

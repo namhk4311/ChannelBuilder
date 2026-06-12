@@ -35,6 +35,7 @@ from agents.producer import (
     producer_router,
     run_migrations,
 )
+from workflow import workflow_router
 
 # Setup logging ngay khi module load — uvicorn import server sẽ trigger
 setup_logging()
@@ -80,6 +81,7 @@ app.include_router(clips_router)
 app.include_router(importer_router)
 app.include_router(editor_router)
 app.include_router(producer_router)
+app.include_router(workflow_router)
 
 # Static frontend — mount LAST để /api routes ưu tiên
 STATIC_DIR.mkdir(exist_ok=True)
