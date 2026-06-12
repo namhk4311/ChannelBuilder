@@ -28,27 +28,29 @@ router = APIRouter(tags=["clips"])
 async def upload_video(
     file: UploadFile = File(...),
     category: str = Form(...),
-    clip_tag: str = Form(...),
     description: str = Form(""),
     mood: str = Form(""),
     has_people: str = Form("false"),
-    people_note_raw: str = Form(""),
     notes: str = Form(""),
+    clip_tag: Optional[str] = Form(None),   # nội bộ, auto-derive nếu không truyền
+    people_note_raw: str = Form(""),         # legacy import field, không expose UI
 ):
-    log.info("upload start: file=%s size_hint=%s category=%s tag=%s",
-             file.filename, file.size, category, clip_tag)
-
-    # Validate FK explicitly để có message tiếng Việt rõ ràng
+    # Validate FK + lấy default_tag của category nếu user không cung cấp clip_tag
     with pg() as conn:
-        row = conn.execute(
-            "SELECT 1 FROM categories WHERE name = %s", (category,)
+        cat = conn.execute(
+            "SELECT default_tag FROM categories WHERE name = %s", (category,)
         ).fetchone()
-        if not row:
+        if not cat:
             log.warning("upload rejected: category '%s' not found", category)
             raise HTTPException(
                 400,
                 f"Category '{category}' chưa tồn tại. Tạo trước qua POST /api/categories.",
             )
+        if not clip_tag:
+            clip_tag = cat["default_tag"] or category   # fallback tuyệt đối
+
+    log.info("upload start: file=%s size_hint=%s category=%s tag=%s (auto=%s)",
+             file.filename, file.size, category, clip_tag, "yes" if not clip_tag else "no")
 
     video_id = uuid.uuid4().hex[:12]
     ext = Path(file.filename or "").suffix or ".mp4"
@@ -112,16 +114,37 @@ def list_videos(category: Optional[str] = None):
     return rows
 
 
+MOODS = [
+    "yên tĩnh",
+    "năng động",
+    "thư giãn",
+    "vui tươi",
+    "chuyên nghiệp",
+    "ấm cúng",
+    "sang trọng",
+    "hài hước",
+    "trang trọng",
+    "trẻ trung",
+]
+
+
+@router.get("/api/moods")
+def list_moods():
+    """Hardcoded list mood cho dropdown UI — không query DB."""
+    return {"moods": MOODS}
+
+
 # ─── Patch ───────────────────────────────────────────────────────────────────
 
 class VideoUpdate(BaseModel):
     category: Optional[str] = None
-    clip_tag: Optional[str] = None
     description: Optional[str] = None
     mood: Optional[str] = None
     has_people: Optional[bool] = None
-    people_note_raw: Optional[str] = None
     notes: Optional[str] = None
+    # clip_tag không expose qua PATCH — auto theo category
+    # people_note_raw bỏ khỏi UI — redundant với has_people boolean
+    #   (cột DB giữ để compat với data import từ INDEX.json)
 
 
 @router.patch("/api/videos/{video_id}")
@@ -134,10 +157,13 @@ def update_video(video_id: str, body: VideoUpdate):
     if "category" in payload:
         with pg() as conn:
             row = conn.execute(
-                "SELECT 1 FROM categories WHERE name = %s", (payload["category"],)
+                "SELECT default_tag FROM categories WHERE name = %s",
+                (payload["category"],),
             ).fetchone()
             if not row:
                 raise HTTPException(400, f"Category '{payload['category']}' chưa tồn tại")
+            # Đổi category → đồng bộ clip_tag theo default_tag mới (auto nội bộ)
+            payload["clip_tag"] = row["default_tag"] or payload["category"]
 
     set_clause = ", ".join(f"{k} = %s" for k in payload.keys())
     values = list(payload.values()) + [video_id]

@@ -29,6 +29,19 @@ from .storage import minio_client
 log = logging.getLogger(__name__)
 router = APIRouter(tags=["editor"])
 
+# Output chuẩn TikTok dọc — mọi clip được normalize về đây trước khi nối,
+# tránh vỡ hình tại điểm chuyển cảnh do clip nguồn khác fps/codec/resolution.
+TARGET_W, TARGET_H, TARGET_FPS = 1080, 1920, 30
+
+
+def _has_audio_stream(path: Path) -> bool:
+    r = subprocess.run(
+        ["ffprobe", "-v", "error", "-select_streams", "a",
+         "-show_entries", "stream=codec_type", "-of", "csv=p=0", str(path)],
+        capture_output=True, text=True, timeout=10,
+    )
+    return bool(r.stdout.strip())
+
 
 class ConcatRequest(BaseModel):
     video_ids: list[str]
@@ -39,86 +52,136 @@ class ConcatRequest(BaseModel):
     mute_source: bool = True
 
 
-@router.post("/api/concat")
-def concat_videos(req: ConcatRequest):
-    if len(req.video_ids) < 2:
-        raise HTTPException(400, "Cần chọn ít nhất 2 video")
+def concat_to_local(
+    video_ids: list[str],
+    workdir: Path,
+    mute_source: bool = True,
+    output_name: Optional[str] = None,
+) -> tuple[Path, float]:
+    """
+    Download clip từ MinIO + ffmpeg concat → local file. KHÔNG upload.
 
-    log.info("concat begin: %d clips → %s (mute_source=%s)",
-             len(req.video_ids), req.output_name or "auto", req.mute_source)
+    Caller (endpoint /api/concat hoặc producer) quyết định upload/dùng tiếp.
+
+    Trả về (local_output_path, duration_sec).
+    Raises HTTPException 400/404/500 nếu input lỗi hoặc ffmpeg fail.
+    """
+    if len(video_ids) < 2:
+        raise HTTPException(400, "Cần chọn ít nhất 2 video")
 
     # 1. Lookup object_name cho từng id
     with pg() as conn:
-        placeholders = ", ".join(["%s"] * len(req.video_ids))
+        placeholders = ", ".join(["%s"] * len(video_ids))
         rows = conn.execute(
             f"SELECT id, object_name FROM videos WHERE id IN ({placeholders})",
-            req.video_ids,
+            video_ids,
         ).fetchall()
 
     by_id = {r["id"]: r["object_name"] for r in rows}
-    missing = [v for v in req.video_ids if v not in by_id]
+    missing = [v for v in video_ids if v not in by_id]
     if missing:
         log.warning("concat rejected: missing video ids %s", missing)
         raise HTTPException(404, f"Không tìm thấy video: {missing}")
 
-    # 2. Work trong temp dir để cleanup chắc chắn
+    # 2. Download theo đúng thứ tự
+    t0 = time.monotonic()
+    local_paths = []
+    for idx, vid in enumerate(video_ids):
+        obj = by_id[vid]
+        local = workdir / f"{idx:03d}_{obj}"
+        minio_client.fget_object(BUCKET_SOURCES, obj, str(local))
+        local_paths.append(local)
+    log.debug("concat: downloaded %d files in %.2fs",
+              len(local_paths), time.monotonic() - t0)
+
+    # 3. Build ffmpeg concat FILTER (không dùng concat demuxer).
+    #    Demuxer (-f concat) nối ở mức packet, yêu cầu mọi clip giống hệt
+    #    codec/resolution/fps/timebase — clip iPhone .MOV không đồng nhất
+    #    → vỡ hình tại điểm chuyển cảnh. Concat filter decode từng input
+    #    riêng, normalize về 1080x1920 / 30fps / yuv420p rồi mới nối frame.
+    n = len(local_paths)
+    filters = []
+    for i in range(n):
+        filters.append(
+            f"[{i}:v]scale={TARGET_W}:{TARGET_H}:force_original_aspect_ratio=decrease,"
+            f"pad={TARGET_W}:{TARGET_H}:(ow-iw)/2:(oh-ih)/2,"
+            f"setsar=1,fps={TARGET_FPS},format=yuv420p[v{i}]"
+        )
+
+    keep_audio = not mute_source
+    if keep_audio:
+        # Concat filter cần mọi input có audio track — clip thiếu audio sẽ
+        # làm filter graph fail. Probe trước; thiếu thì fallback mute.
+        silent = [p.name for p in local_paths if not _has_audio_stream(p)]
+        if silent:
+            log.warning("concat: %d clip không có audio (%s) → fallback mute",
+                        len(silent), silent)
+            keep_audio = False
+
+    if keep_audio:
+        for i in range(n):
+            filters.append(f"[{i}:a]aresample=48000[a{i}]")
+        pairs = "".join(f"[v{i}][a{i}]" for i in range(n))
+        filters.append(f"{pairs}concat=n={n}:v=1:a=1[outv][outa]")
+        map_args = ["-map", "[outv]", "-map", "[outa]",
+                    "-c:a", "aac", "-b:a", "128k"]
+    else:
+        chain = "".join(f"[v{i}]" for i in range(n))
+        filters.append(f"{chain}concat=n={n}:v=1:a=0[outv]")
+        map_args = ["-map", "[outv]", "-an"]
+
+    output_basename = output_name or f"concat_{uuid.uuid4().hex[:8]}.mp4"
+    if not output_basename.endswith(".mp4"):
+        output_basename += ".mp4"
+    output_path = workdir / output_basename
+
+    cmd = ["ffmpeg", "-y"]
+    for p in local_paths:
+        cmd += ["-i", str(p)]
+    cmd += [
+        "-filter_complex", ";".join(filters),
+        *map_args,
+        "-c:v", "libx264", "-preset", "fast", "-crf", "23",
+        "-movflags", "+faststart",
+        str(output_path),
+    ]
+    log.debug("concat cmd: %s", " ".join(cmd))
+    t_ffmpeg = time.monotonic()
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    if result.returncode != 0:
+        log.error("ffmpeg failed (rc=%d): %s",
+                  result.returncode, result.stderr[-300:])
+        raise HTTPException(500, f"FFmpeg failed: {result.stderr[-500:]}")
+    log.info("ffmpeg done in %.2fs (concat filter, %dx%d@%dfps, audio: %s)",
+             time.monotonic() - t_ffmpeg, TARGET_W, TARGET_H, TARGET_FPS,
+             "kept" if keep_audio else "muted")
+
+    out_duration, _ = ffprobe_metadata(str(output_path))
+    return output_path, out_duration
+
+
+@router.post("/api/concat")
+def concat_videos(req: ConcatRequest):
+    log.info("concat begin: %d clips → %s (mute_source=%s)",
+             len(req.video_ids), req.output_name or "auto", req.mute_source)
+
     workdir = Path(tempfile.mkdtemp(prefix="concat_"))
     t0 = time.monotonic()
     try:
-        # Download theo đúng thứ tự client gửi
-        local_paths = []
-        for idx, vid in enumerate(req.video_ids):
-            obj = by_id[vid]
-            local = workdir / f"{idx:03d}_{obj}"
-            minio_client.fget_object(BUCKET_SOURCES, obj, str(local))
-            local_paths.append(local)
-        log.debug("concat: downloaded %d files in %.2fs",
-                  len(local_paths), time.monotonic() - t0)
+        output_path, out_duration = concat_to_local(
+            req.video_ids,
+            workdir=workdir,
+            mute_source=req.mute_source,
+            output_name=req.output_name,
+        )
+        output_basename = output_path.name
 
-        # 3. Concat demuxer list
-        list_file = workdir / "list.txt"
-        with open(list_file, "w") as f:
-            for p in local_paths:
-                f.write(f"file '{p.absolute()}'\n")
-
-        # 4. ffmpeg re-encode để xử lý clip mixed codec/resolution
-        output_basename = req.output_name or f"output_{uuid.uuid4().hex[:8]}"
-        if not output_basename.endswith(".mp4"):
-            output_basename += ".mp4"
-        output_path = workdir / output_basename
-
-        # Audio handling:
-        #   mute_source=True  → `-an` bỏ hẳn audio track (đúng brand guide).
-        #                       Sau này voice mux (TTS) sẽ thêm track mới.
-        #   mute_source=False → re-encode AAC giữ tiếng gốc (cho clip có lời thật).
-        audio_args = ["-an"] if req.mute_source else ["-c:a", "aac", "-b:a", "128k"]
-
-        cmd = [
-            "ffmpeg", "-y",
-            "-f", "concat", "-safe", "0",
-            "-i", str(list_file),
-            "-c:v", "libx264", "-preset", "fast", "-crf", "23",
-            *audio_args,
-            "-movflags", "+faststart",
-            str(output_path),
-        ]
-        t_ffmpeg = time.monotonic()
-        result = subprocess.run(cmd, capture_output=True, text=True)
-        if result.returncode != 0:
-            log.error("ffmpeg failed (rc=%d): %s",
-                      result.returncode, result.stderr[-300:])
-            raise HTTPException(500, f"FFmpeg failed: {result.stderr[-500:]}")
-        log.info("ffmpeg done in %.2fs (audio: %s)",
-                 time.monotonic() - t_ffmpeg,
-                 "muted" if req.mute_source else "kept")
-
-        # 5. Upload vào bucket outputs (public-read đã set ở init_buckets)
+        # Upload vào bucket outputs (public-read đã set ở init_buckets)
         minio_client.fput_object(
             BUCKET_OUTPUTS, output_basename, str(output_path),
             content_type="video/mp4",
         )
 
-        out_duration, _ = ffprobe_metadata(str(output_path))
         public_url = f"http://{MINIO_ENDPOINT}/{BUCKET_OUTPUTS}/{output_basename}"
 
         log.info("concat done: %s duration=%.2fs total=%.2fs url=%s",

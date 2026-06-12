@@ -68,4 +68,24 @@ def init_db() -> None:
         """)
         conn.execute("CREATE INDEX IF NOT EXISTS videos_category_idx ON videos(category)")
         conn.execute("CREATE INDEX IF NOT EXISTS videos_clip_tag_idx ON videos(clip_tag)")
-    log.info("init_db: schema ready (categories + videos)")
+
+        # Cache TTS theo hash(script + voice_id + model_id) — tránh gọi
+        # ElevenLabs lặp cho cùng 1 kịch bản. mp3 lưu trong MinIO outputs
+        # bucket, metadata + alignment lưu ở đây.
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS tts_cache (
+                hash         TEXT PRIMARY KEY,
+                voice_id     TEXT NOT NULL,
+                model_id     TEXT NOT NULL,
+                script       TEXT NOT NULL,
+                object_name  TEXT NOT NULL,
+                voice_url    TEXT NOT NULL,
+                alignment    JSONB,
+                duration_sec REAL,
+                size_bytes   BIGINT,
+                created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                last_used_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                hit_count    INTEGER NOT NULL DEFAULT 0
+            )
+        """)
+    log.info("init_db: schema ready (categories + videos + tts_cache)")

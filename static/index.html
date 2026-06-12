@@ -151,6 +151,32 @@
   .result a { color: var(--vng); font-weight: 700; word-break: break-all; }
   .result code { background: rgba(0,0,0,0.05); padding: 2px 6px; border-radius: 4px; font-size: 12px; word-break: break-all; }
 
+  /* Producer — script-to-video result grid */
+  .produce-textarea { width: 100%; min-height: 140px; font: inherit; padding: 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); color: var(--text-1); resize: vertical; }
+  .produce-textarea:focus { outline: 2px solid var(--vng); outline-offset: -1px; border-color: transparent; }
+  .produce-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 10px; }
+  .produce-cell { background: var(--surface); padding: 10px; border-radius: 8px; border: 1px solid var(--border); }
+  .produce-cell-final { grid-column: 1 / -1; border-color: var(--vng); background: rgba(238, 87, 35, 0.04); }
+  .produce-cell video, .produce-cell audio { width: 100%; border-radius: 6px; background: #000; max-height: 360px; }
+  .produce-cell audio { background: var(--surface-2); }
+  .produce-label { font-size: 11px; font-weight: 700; color: var(--text-2); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .produce-meta { font-size: 11px; color: var(--text-3); margin-top: 4px; }
+  .produce-meta a { color: var(--vng); }
+  .produce-clips { margin-top: 12px; font-size: 12px; color: var(--text-2); }
+  .produce-clips code { background: var(--surface-2); padding: 2px 6px; border-radius: 4px; font-size: 11px; margin: 0 2px; }
+
+  /* Producer progress bar */
+  .progress-wrap { margin-top: 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; }
+  .progress-head { display: flex; justify-content: space-between; align-items: baseline; font-size: 12.5px; margin-bottom: 8px; gap: 12px; }
+  .progress-head .msg { color: var(--text-1); font-weight: 500; }
+  .progress-head .pct { color: var(--vng); font-weight: 700; font-variant-numeric: tabular-nums; }
+  .progress-track { height: 8px; background: var(--surface-2); border-radius: 999px; overflow: hidden; }
+  .progress-fill { height: 100%; width: 0%; background: var(--vng); border-radius: 999px; transition: width 0.6s ease; }
+  .progress-fill.indeterminate { animation: pulse 1.2s ease-in-out infinite; }
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.55; } }
+  .progress-steps { display: flex; justify-content: space-between; margin-top: 8px; font-size: 10px; color: var(--text-3); }
+  .progress-steps span.active { color: var(--vng); font-weight: 700; }
+
   /* Modal */
   .backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 50; display: flex; align-items: center; justify-content: center; padding: 24px; }
   .backdrop.hidden { display: none; }
@@ -165,8 +191,6 @@
   @keyframes slideIn { from { transform: translateX(20px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
 
   /* Import button cụm */
-  .import-card { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
-  .import-card .desc-block { flex: 1; min-width: 220px; font-size: 12px; color: var(--text-2); }
 
   .yn { font-weight: 700; }
   .yn.yes { color: var(--success); }
@@ -193,22 +217,10 @@
 
     <div class="new-cat-form hidden" id="newCatForm">
       <div class="form-grid">
-        <div>
-          <label class="field">Name (slug)</label>
-          <input type="text" id="newCatName" placeholder="vd: 12_team_party" />
-          <div class="form-hint">a-z 0-9 underscore. Vd: <code>12_team_party</code></div>
-        </div>
-        <div>
-          <label class="field">Label (hiển thị)</label>
-          <input type="text" id="newCatLabel" placeholder="Team party" />
-        </div>
-        <div>
-          <label class="field">Default clip tag</label>
-          <input type="text" id="newCatTag" placeholder="auto từ name nếu để trống" />
-        </div>
-        <div>
-          <label class="field">Description</label>
-          <input type="text" id="newCatDesc" placeholder="(optional)" />
+        <div class="full">
+          <label class="field">Tên category</label>
+          <input type="text" id="newCatLabel" placeholder="vd: Team party, Sự kiện CLB, ..." />
+          <div class="form-hint">Slug tự sinh: <code id="newCatSlugPreview" style="color: var(--vng);">—</code></div>
         </div>
       </div>
       <div class="form-actions">
@@ -216,15 +228,6 @@
         <button id="createCatBtn">Tạo</button>
       </div>
     </div>
-  </section>
-
-  <!-- Card: Import from data_raw -->
-  <section class="card import-card">
-    <h2 style="margin: 0">Import data_raw</h2>
-    <div class="desc-block">
-      Re-import từ <code>data_raw/00_INDEX.json</code>. Idempotent — chạy lại bao nhiêu lần cũng không trùng.
-    </div>
-    <button id="importBtn" class="secondary">Import</button>
   </section>
 
   <!-- Card: Upload -->
@@ -243,28 +246,19 @@
         <div class="form-hint">Chưa có category? Tạo ở card 1 trước.</div>
       </div>
       <div>
-        <label class="field">Clip tag</label>
-        <input type="text" id="upTag" placeholder="auto từ category" />
-      </div>
-      <div>
         <label class="field">Mood</label>
-        <input type="text" id="upMood" list="moodList" placeholder="yên tĩnh, năng động..." />
-        <datalist id="moodList"></datalist>
-      </div>
-      <div class="full">
-        <label class="field">Description</label>
-        <textarea id="upDesc" placeholder="Mô tả nội dung clip"></textarea>
+        <select id="upMood"><option value="">— chọn mood —</option></select>
       </div>
       <div>
         <label class="field">Có người trong clip?</label>
         <div style="padding: 9px 0;">
           <input type="checkbox" id="upHasPeople" style="vertical-align: middle;" />
-          <label for="upHasPeople" style="font-size: 13px; cursor: pointer;">Có người</label>
+          <label for="upHasPeople" style="font-size: 13px; cursor: pointer;">Có người trong khung hình</label>
         </div>
       </div>
-      <div>
-        <label class="field">People note</label>
-        <input type="text" id="upPeopleNote" placeholder="vd: 2 người đi ngang" value="không" />
+      <div class="full">
+        <label class="field">Description</label>
+        <textarea id="upDesc" placeholder="Mô tả nội dung clip"></textarea>
       </div>
       <div class="full">
         <label class="field">Notes</label>
@@ -276,9 +270,27 @@
     </div>
   </section>
 
+  <!-- Card: Producer (script → video tự động) -->
+  <section class="card">
+    <h2>3. Tạo video từ kịch bản <span style="opacity:0.6">· Producer agent</span></h2>
+    <textarea id="produceScript" class="produce-textarea"
+              placeholder="Paste kịch bản voice-over Việt vào đây.&#10;&#10;VD: Ngày đầu vào VNG, tôi không ngờ canteen lại đẹp đến vậy. Sảnh chính rộng, có nhiều cây xanh, các Starter ngồi làm việc rất thoải mái..."></textarea>
+    <div class="form-actions" style="align-items: center; gap: 16px;">
+      <label style="font-size: 13px; cursor: pointer; user-select: none; display: inline-flex; align-items: center; gap: 6px;">
+        <input type="checkbox" id="produceSubs" checked style="accent-color: var(--vng); width: 16px; height: 16px;" />
+        Phụ đề theo giọng đọc
+      </label>
+      <button id="produceBtn">🎬 Tạo video</button>
+    </div>
+    <div class="form-hint" style="margin-top: 6px;">
+      Agent sẽ: TTS giọng đọc (+ timestamps) → LLM chọn clip → ghép + align → mux voice + phụ đề → trả 3 link (silent / voice / final).
+    </div>
+    <div id="produceResult"></div>
+  </section>
+
   <!-- Card: Video list -->
   <section class="card">
-    <h2>3. Kho clip <span id="videoCountLabel" style="opacity:0.6"></span></h2>
+    <h2>4. Kho clip <span id="videoCountLabel" style="opacity:0.6"></span></h2>
     <div class="filter-bar">
       <label style="font-size: 12px; color: var(--text-2);">Filter:</label>
       <select id="filterCategory">
@@ -305,13 +317,9 @@
     <h3>Sửa metadata video</h3>
     <div class="modal-sub" id="editVidId"></div>
     <div class="form-grid">
-      <div>
+      <div class="full">
         <label class="field">Category</label>
         <select id="editCategory"></select>
-      </div>
-      <div>
-        <label class="field">Clip tag</label>
-        <input type="text" id="editTag" />
       </div>
       <div class="full">
         <label class="field">Description</label>
@@ -319,17 +327,14 @@
       </div>
       <div>
         <label class="field">Mood</label>
-        <input type="text" id="editMood" list="moodList" />
+        <select id="editMood"><option value="">— chọn mood —</option></select>
       </div>
       <div>
-        <label class="field">Has people</label>
+        <label class="field">Có người trong clip?</label>
         <div style="padding: 9px 0;">
           <input type="checkbox" id="editHasPeople" />
+          <label for="editHasPeople" style="font-size: 13px; cursor: pointer; margin-left: 4px;">Có người trong khung hình</label>
         </div>
-      </div>
-      <div class="full">
-        <label class="field">People note</label>
-        <input type="text" id="editPeopleNote" />
       </div>
       <div class="full">
         <label class="field">Notes</label>
@@ -349,17 +354,9 @@
     <h3>Sửa category</h3>
     <div class="modal-sub" id="editCatName"></div>
     <div class="form-grid">
-      <div>
-        <label class="field">Label</label>
-        <input type="text" id="editCatLabel" />
-      </div>
-      <div>
-        <label class="field">Default tag</label>
-        <input type="text" id="editCatTag" />
-      </div>
       <div class="full">
-        <label class="field">Description</label>
-        <textarea id="editCatDesc"></textarea>
+        <label class="field">Label (hiển thị)</label>
+        <input type="text" id="editCatLabel" />
       </div>
     </div>
     <div class="form-actions">
@@ -415,7 +412,6 @@ async function loadVideos() {
   videos = await res.json();
   if (!activeFilter) allVideos = videos;
   renderVideos();
-  renderMoodList();
 }
 
 // ─── Renderers ───────────────────────────────────────────────────────────────
@@ -461,9 +457,30 @@ function renderCategoryDropdowns() {
   if (fPrev) fSel.value = fPrev;
 }
 
-function renderMoodList() {
-  const set = new Set(allVideos.map(v => v.mood).filter(Boolean));
-  $('moodList').innerHTML = [...set].sort().map(m => `<option value="${esc(m)}">`).join('');
+// Mood dropdown — danh sách hardcoded từ backend (/api/moods).
+// User chỉ chọn từ list cố định, không gõ tay.
+let moods = [];
+
+async function loadMoods() {
+  try {
+    const res = await fetch('/api/moods');
+    const data = await res.json();
+    moods = data.moods || [];
+  } catch { moods = []; }
+  renderMoodDropdowns();
+}
+
+function renderMoodDropdowns() {
+  const opts = ['<option value="">— chọn mood —</option>']
+    .concat(moods.map(m => `<option value="${esc(m)}">${esc(m)}</option>`))
+    .join('');
+  for (const id of ['upMood', 'editMood']) {
+    const sel = $(id);
+    if (!sel) continue;
+    const prev = sel.value;
+    sel.innerHTML = opts;
+    if (prev && moods.includes(prev)) sel.value = prev;
+  }
 }
 
 function renderVideos() {
@@ -481,7 +498,7 @@ function renderVideos() {
     const orderBadge = orderIdx >= 0 ? `<span class="order-badge">${orderIdx + 1}</span>` : '';
     const selCls = orderIdx >= 0 ? 'selected' : '';
     const peopleBadge = v.has_people
-      ? `<span class="yn yes">✓</span> <span class="desc" style="display:inline">${esc(v.people_note_raw || '')}</span>`
+      ? `<span class="yn yes">✓</span>`
       : `<span class="yn no">✗</span>`;
     return `
       <tr class="${selCls}" data-id="${v.id}">
@@ -493,7 +510,6 @@ function renderVideos() {
           <div class="desc" title="${esc(v.description)}">${esc(v.description || '—')}</div>
         </td>
         <td><span class="category-tag" onclick="filterCategory('${esc(v.category)}'); event.stopPropagation()">${esc(v.category)}</span></td>
-        <td>${esc(v.clip_tag)}</td>
         <td>${esc(v.mood || '—')}</td>
         <td class="center">${peopleBadge}</td>
         <td class="resolution nowrap">${esc(v.resolution || '—')}</td>
@@ -511,7 +527,6 @@ function renderVideos() {
         <th></th><th></th>
         <th>ID · File · Description</th>
         <th>Category</th>
-        <th>Tag</th>
         <th>Mood</th>
         <th>People</th>
         <th>Resolution</th>
@@ -555,31 +570,44 @@ function filterCategory(name) {
 $('toggleNewCatBtn').onclick = () => $('newCatForm').classList.toggle('hidden');
 $('cancelNewCatBtn').onclick = () => $('newCatForm').classList.add('hidden');
 
+// Slugify cho tên category: bỏ dấu Việt + space → underscore + chỉ giữ [a-z0-9_]
+function slugify(text) {
+  return (text || '')
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')   // strip combining marks
+    .replace(/đ/gi, 'd')                                 // NFD không decompose đ
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '');
+}
+
+// Live preview slug khi user gõ Label
+$('newCatLabel').oninput = () => {
+  const slug = slugify($('newCatLabel').value);
+  $('newCatSlugPreview').textContent = slug || '—';
+};
+
 $('createCatBtn').onclick = async () => {
-  const name = $('newCatName').value.trim();
-  const label = $('newCatLabel').value.trim() || null;
-  const default_tag = $('newCatTag').value.trim() || null;
-  const description = $('newCatDesc').value.trim();
-  if (!name) { toast('Cần điền name', 'error'); return; }
-  if (!/^[a-z0-9_]+$/.test(name)) {
-    toast('Name chỉ a-z 0-9 underscore', 'error');
+  const label = $('newCatLabel').value.trim();
+  if (!label) { toast('Cần điền tên category', 'error'); return; }
+  const name = slugify(label);
+  if (!name) {
+    toast('Tên không sinh được slug hợp lệ (cần có chữ/số)', 'error');
     return;
   }
+  // default_tag để backend tự derive từ name; description bỏ.
   try {
     const res = await fetch('/api/categories', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, label, default_tag, description }),
+      body: JSON.stringify({ name, label }),
     });
     if (!res.ok) {
       const err = await res.json();
       throw new Error(err.detail || 'Failed');
     }
-    toast('Đã tạo category ' + name, 'success');
-    $('newCatName').value = '';
+    toast(`Đã tạo category "${label}" (slug: ${name})`, 'success');
     $('newCatLabel').value = '';
-    $('newCatTag').value = '';
-    $('newCatDesc').value = '';
+    $('newCatSlugPreview').textContent = '—';
     $('newCatForm').classList.add('hidden');
     await loadCategories();
   } catch (e) {
@@ -593,8 +621,6 @@ function openEditCategory(name) {
   editingCatName = name;
   $('editCatName').textContent = name;
   $('editCatLabel').value = c.label || '';
-  $('editCatTag').value = c.default_tag || '';
-  $('editCatDesc').value = c.description || '';
   $('editCatModal').classList.remove('hidden');
 }
 window.openEditCategory = openEditCategory;
@@ -609,8 +635,6 @@ $('saveEditCatBtn').onclick = async () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         label: $('editCatLabel').value.trim() || null,
-        default_tag: $('editCatTag').value.trim() || null,
-        description: $('editCatDesc').value.trim(),
       }),
     });
     if (!res.ok) throw new Error((await res.json()).detail || 'Failed');
@@ -640,19 +664,13 @@ async function deleteCategory(name) {
 window.deleteCategory = deleteCategory;
 
 // ─── Upload ──────────────────────────────────────────────────────────────────
-$('upCategory').onchange = () => {
-  const name = $('upCategory').value;
-  const c = categories.find(x => x.name === name);
-  if (c && !$('upTag').value.trim()) $('upTag').value = c.default_tag || '';
-};
+// clip_tag không expose UI — backend auto-derive từ category.default_tag.
 
 $('uploadBtn').onclick = async () => {
   const file = $('upFile').files[0];
   const category = $('upCategory').value;
-  const clip_tag = $('upTag').value.trim();
   if (!file) { toast('Chọn file', 'error'); return; }
   if (!category) { toast('Chọn category', 'error'); return; }
-  if (!clip_tag) { toast('Cần clip tag', 'error'); return; }
 
   const btn = $('uploadBtn');
   btn.disabled = true; btn.textContent = 'Đang tải...';
@@ -660,11 +678,9 @@ $('uploadBtn').onclick = async () => {
   const fd = new FormData();
   fd.append('file', file);
   fd.append('category', category);
-  fd.append('clip_tag', clip_tag);
   fd.append('description', $('upDesc').value);
   fd.append('mood', $('upMood').value);
   fd.append('has_people', $('upHasPeople').checked ? 'true' : 'false');
-  fd.append('people_note_raw', $('upPeopleNote').value);
   fd.append('notes', $('upNotes').value);
 
   try {
@@ -679,7 +695,6 @@ $('uploadBtn').onclick = async () => {
     $('upDesc').value = '';
     $('upMood').value = '';
     $('upHasPeople').checked = false;
-    $('upPeopleNote').value = 'không';
     $('upNotes').value = '';
     await Promise.all([loadCategories(), loadVideos()]);
   } catch (e) {
@@ -696,11 +711,10 @@ function openEditVideo(id) {
   editingVideoId = id;
   $('editVidId').textContent = id + ' · ' + v.file;
   $('editCategory').value = v.category;
-  $('editTag').value = v.clip_tag;
   $('editDesc').value = v.description || '';
-  $('editMood').value = v.mood || '';
+  // mood là dropdown cố định — chọn nếu nằm trong list, không thì để trống
+  $('editMood').value = moods.includes(v.mood) ? v.mood : '';
   $('editHasPeople').checked = !!v.has_people;
-  $('editPeopleNote').value = v.people_note_raw || '';
   $('editNotes').value = v.notes || '';
   $('editModal').classList.remove('hidden');
 }
@@ -716,18 +730,16 @@ $('saveEditBtn').onclick = async () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         category: $('editCategory').value,
-        clip_tag: $('editTag').value.trim(),
         description: $('editDesc').value,
         mood: $('editMood').value,
         has_people: $('editHasPeople').checked,
-        people_note_raw: $('editPeopleNote').value,
         notes: $('editNotes').value,
       }),
     });
     if (!res.ok) throw new Error((await res.json()).detail || 'Failed');
     toast('Đã lưu', 'success');
     $('editModal').classList.add('hidden');
-    await Promise.all([loadCategories(), loadVideos()]);
+    await Promise.all([loadCategories(), loadVideos(), loadMoods()]);
   } catch (e) {
     toast('Lỗi: ' + e.message, 'error');
   }
@@ -747,22 +759,159 @@ async function deleteVideo(id) {
 }
 window.deleteVideo = deleteVideo;
 
-// ─── Import ──────────────────────────────────────────────────────────────────
-$('importBtn').onclick = async () => {
-  const btn = $('importBtn');
-  btn.disabled = true; btn.textContent = 'Đang import...';
+// Mood dropdown: bind toggle Khác (gõ tay)
+
+// ─── Producer (script → video, job + polling progress) ──────────────────────
+const PRODUCE_STEPS = ['TTS', 'LLM', 'Ghép', 'Align', 'Mux', 'Upload'];
+let producePollTimer = null;
+
+function produceProgressHtml() {
+  const steps = PRODUCE_STEPS.map((s, i) =>
+    `<span data-step="${i + 1}">${i + 1}. ${s}</span>`).join('');
+  return `
+    <div class="progress-wrap">
+      <div class="progress-head">
+        <span class="msg" id="progMsg">Đang khởi động...</span>
+        <span class="pct" id="progPct">0%</span>
+      </div>
+      <div class="progress-track"><div class="progress-fill indeterminate" id="progFill"></div></div>
+      <div class="progress-steps" id="progSteps">${steps}</div>
+    </div>
+  `;
+}
+
+function updateProduceProgress(job) {
+  const pct = job.percent || 0;
+  const fill = $('progFill');
+  if (fill) {
+    fill.style.width = pct + '%';
+    if (pct > 0) fill.classList.remove('indeterminate');
+  }
+  if ($('progPct')) $('progPct').textContent = pct + '%';
+  if ($('progMsg')) $('progMsg').textContent = job.message || '...';
+  // Highlight step hiện tại từ message "[N/6] ..."
+  const m = (job.message || '').match(/^\[(\d)\/6\]/);
+  if (m && $('progSteps')) {
+    const cur = parseInt(m[1], 10);
+    $('progSteps').querySelectorAll('span').forEach(sp => {
+      sp.classList.toggle('active', parseInt(sp.dataset.step, 10) <= cur);
+    });
+  }
+}
+
+function stopProducePoll() {
+  if (producePollTimer) { clearInterval(producePollTimer); producePollTimer = null; }
+  const btn = $('produceBtn');
+  btn.disabled = false; btn.textContent = '🎬 Tạo video';
+}
+
+$('produceBtn').onclick = async () => {
+  const script = $('produceScript').value.trim();
+  if (!script) { toast('Cần script', 'error'); return; }
+  if (script.length < 10) { toast('Script quá ngắn (≥10 chars)', 'error'); return; }
+
+  const btn = $('produceBtn');
+  btn.disabled = true; btn.textContent = '⏳ Đang tạo...';
+  $('produceResult').innerHTML = produceProgressHtml();
+
   try {
-    const res = await fetch('/api/import-data-raw', { method: 'POST' });
+    const res = await fetch('/api/produce', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ script, subtitles: $('produceSubs').checked }),
+    });
     if (!res.ok) throw new Error((await res.json()).detail || 'Failed');
-    const r = await res.json();
-    toast(`Categories +${r.categories_upserted} · Videos +${r.videos_imported} · Skipped ${r.videos_skipped}`, 'success');
-    await Promise.all([loadCategories(), loadVideos()]);
+    const { job_id } = await res.json();
+
+    producePollTimer = setInterval(async () => {
+      try {
+        const sres = await fetch('/api/produce/status/' + job_id);
+        if (!sres.ok) throw new Error('Job biến mất (server restart?)');
+        const job = await sres.json();
+        updateProduceProgress(job);
+
+        if (job.status === 'done') {
+          stopProducePoll();
+          renderProduceResult(job.result);
+        } else if (job.status === 'error') {
+          stopProducePoll();
+          $('produceResult').innerHTML =
+            `<div class="result error">❌ ${esc(job.error || 'Unknown error')}</div>`;
+        }
+      } catch (e) {
+        stopProducePoll();
+        $('produceResult').innerHTML =
+          `<div class="result error">❌ ${esc(e.message)}</div>`;
+      }
+    }, 800);
   } catch (e) {
-    toast('Lỗi: ' + e.message, 'error');
-  } finally {
-    btn.disabled = false; btn.textContent = 'Import';
+    stopProducePoll();
+    $('produceResult').innerHTML = `<div class="result error">❌ ${esc(e.message)}</div>`;
   }
 };
+
+function renderProduceResult(r) {
+  if (!r) {
+    $('produceResult').innerHTML =
+      '<div class="result error">❌ Job xong nhưng result trống — check log backend.</div>';
+    return;
+  }
+  const al = r.alignment || {};
+  const clips = r.selected_clips || [];
+  const alignDesc = al.action === 'trim'
+    ? `cắt đuôi ${al.trimmed_sec}s`
+    : al.action === 'speedup'
+    ? `slowdown factor ${al.factor} (+${al.stretched_sec}s)`
+    : `bỏ qua (delta ${al.delta_sec ?? '?'}s)`;
+
+  $('produceResult').innerHTML = `
+      <div class="result">
+        <div style="font-weight:600; margin-bottom: 12px;">
+          ✅ Hoàn tất · final ${fmtDuration(r.final_duration_sec)} ·
+          align: <code>${al.action || 'n/a'}</code> (${alignDesc}) ·
+          ${r.subtitles ? '💬 có phụ đề ·' : ''}
+          run_id: <code>${r.run_id}</code>
+        </div>
+
+        <div class="produce-grid">
+          <!-- 1. Silent video -->
+          <div class="produce-cell">
+            <div class="produce-label">1️⃣ Video đã ghép (silent)</div>
+            <video src="${r.silent_video_url}" controls preload="metadata"></video>
+            <div class="produce-meta">
+              ${fmtDuration(r.silent_video_duration_sec)} ·
+              <a href="${r.silent_video_url}" target="_blank">tải MP4</a>
+            </div>
+          </div>
+
+          <!-- 2. Voice audio -->
+          <div class="produce-cell">
+            <div class="produce-label">2️⃣ Voice (TTS ElevenLabs)</div>
+            <audio src="${r.voice_url}" controls preload="metadata"></audio>
+            <div class="produce-meta">
+              ${fmtDuration(r.voice_duration_sec)} ·
+              <a href="${r.voice_url}" target="_blank">tải MP3</a>
+            </div>
+          </div>
+
+          <!-- 3. Final video (span full) -->
+          <div class="produce-cell produce-cell-final">
+            <div class="produce-label">3️⃣ Final (đã mux voice) ★</div>
+            <video src="${r.output_url}" controls preload="metadata"></video>
+            <div class="produce-meta">
+              ${fmtDuration(r.final_duration_sec)} ·
+              <a href="${r.output_url}" target="_blank">tải MP4</a>
+            </div>
+          </div>
+        </div>
+
+        <div class="produce-clips">
+          <strong>LLM chọn ${clips.length} clip:</strong>
+          ${clips.map(c => `<code>${esc(c)}</code>`).join(' · ')}
+        </div>
+      </div>
+    `;
+}
 
 // ─── Filter ──────────────────────────────────────────────────────────────────
 $('filterCategory').onchange = () => {
@@ -809,8 +958,7 @@ window.filterCategory = filterCategory;
 
 // ─── Init ────────────────────────────────────────────────────────────────────
 (async () => {
-  await loadCategories();
-  await loadVideos();
+  await Promise.all([loadCategories(), loadVideos(), loadMoods()]);
 })();
 </script>
 </body>
