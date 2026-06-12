@@ -25,6 +25,7 @@ Usage:
 from __future__ import annotations
 
 import json
+import logging
 import math
 import time
 from pathlib import Path
@@ -33,6 +34,8 @@ from typing import Optional
 import requests
 
 from config import TIKTOK_CLIENT_KEY, TIKTOK_CLIENT_SECRET
+
+log = logging.getLogger(__name__)
 
 BASE_DIR = Path(__file__).parent
 
@@ -78,6 +81,7 @@ class TikTokClient:
         return self._tokens["access_token"]
 
     def _refresh(self) -> None:
+        log.info("token · refresh (current expired/sắp hết)")
         resp = requests.post(
             TOKEN_URL,
             headers={"Content-Type": "application/x-www-form-urlencoded"},
@@ -91,11 +95,13 @@ class TikTokClient:
         )
         data = resp.json()
         if "access_token" not in data:
+            log.error("token · refresh thất bại: %s", json.dumps(data)[:200])
             raise TikTokError(f"Token refresh failed: {json.dumps(data)}")
         data["_expires_at"] = time.time() + data.get("expires_in", 86400)
         self._tokens = data
         self._expires_at = data["_expires_at"]
         self.token_file.write_text(json.dumps(data, indent=2))
+        log.info("token · refresh OK · expires in %ds", data.get("expires_in", 0))
 
     def _headers(self) -> dict:
         return {
@@ -125,6 +131,8 @@ class TikTokClient:
         else:
             chunk_size = CHUNK_SIZE
             total_chunks = math.floor(video_size / chunk_size)
+        log.info("post_video · 1/3 init · size=%.1fMB chunks=%d × %.1fMB privacy=%s",
+                 video_size / 1e6, total_chunks, chunk_size / 1e6, privacy_level)
 
         resp = requests.post(
             INIT_URL,
@@ -148,17 +156,22 @@ class TikTokClient:
         )
         data = resp.json()
         if data.get("error", {}).get("code") not in (None, "ok"):
+            log.error("post_video · init thất bại: %s", json.dumps(data)[:300])
             raise TikTokError(f"Init failed: {json.dumps(data)}")
         publish_id = data["data"]["publish_id"]
         upload_url = data["data"]["upload_url"]
+        log.info("post_video · init OK · publish_id=%s", publish_id)
 
         # 2. upload chunks
+        t_up = time.monotonic()
         with open(video_path, "rb") as f:
             for i in range(total_chunks):
                 start = i * chunk_size
                 end = video_size - 1 if i == total_chunks - 1 else start + chunk_size - 1
                 f.seek(start)
                 chunk = f.read(end - start + 1)
+                log.info("post_video · 2/3 chunk %d/%d (%.1fMB)",
+                         i + 1, total_chunks, len(chunk) / 1e6)
                 up = requests.put(
                     upload_url,
                     headers={
@@ -170,15 +183,22 @@ class TikTokClient:
                     timeout=300,
                 )
                 if up.status_code not in (200, 201, 206):
+                    log.error("post_video · chunk %d/%d upload thất bại (%d): %s",
+                              i + 1, total_chunks, up.status_code, up.text[:200])
                     raise TikTokError(
                         f"Chunk {i + 1}/{total_chunks} upload failed "
                         f"({up.status_code}): {up.text}"
                     )
+        log.info("post_video · upload xong %d chunks in %.1fs", total_chunks,
+                 time.monotonic() - t_up)
 
         # 3. poll status
+        log.info("post_video · 3/3 poll status (timeout %ds)", poll_timeout_s)
         video_id = None
         deadline = time.time() + poll_timeout_s
+        poll_n = 0
         while time.time() < deadline:
+            poll_n += 1
             st = requests.post(
                 STATUS_URL,
                 headers=self._headers(),
@@ -186,18 +206,22 @@ class TikTokClient:
                 timeout=30,
             ).json()
             status = st.get("data", {}).get("status")
+            log.info("post_video · poll #%d · status=%s", poll_n, status)
             if status == "PUBLISH_COMPLETE":
                 video_id = st["data"].get("publicaly_available_post_id") or None
                 if isinstance(video_id, list):
                     video_id = video_id[0] if video_id else None
+                log.info("post_video · COMPLETE · video_id=%s", video_id)
                 return {
                     "publish_id": publish_id,
                     "video_id": str(video_id) if video_id else None,
                     "status": "published",
                 }
             if status == "FAILED":
+                log.error("post_video · TikTok FAILED: %s", json.dumps(st)[:300])
                 raise TikTokError(f"Publish failed: {json.dumps(st)}")
             time.sleep(5)
+        log.error("post_video · poll timeout sau %ds", poll_timeout_s)
         raise TikTokError(f"Timed out waiting for publish {publish_id}")
 
     # ---------- metrics ----------
@@ -206,14 +230,20 @@ class TikTokClient:
         """Fetch metrics for the authorized user's own videos.
         Requires the video.list scope. Max 20 ids per call."""
         if not video_ids:
+            log.debug("get_video_metrics · không có id, return []")
             return []
+        capped = [str(v) for v in video_ids[:20]]
+        log.info("get_video_metrics · query %d id (request %d)", len(capped), len(video_ids))
         resp = requests.post(
             f"{VIDEO_QUERY_URL}?fields={METRIC_FIELDS}",
             headers=self._headers(),
-            json={"filters": {"video_ids": [str(v) for v in video_ids[:20]]}},
+            json={"filters": {"video_ids": capped}},
             timeout=30,
         )
         data = resp.json()
         if data.get("error", {}).get("code") not in (None, "ok"):
+            log.error("get_video_metrics · API error: %s", json.dumps(data)[:300])
             raise TikTokError(f"Metrics query failed: {json.dumps(data)}")
-        return data.get("data", {}).get("videos", [])
+        videos = data.get("data", {}).get("videos", [])
+        log.info("get_video_metrics · trả về %d video", len(videos))
+        return videos

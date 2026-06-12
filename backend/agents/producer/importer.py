@@ -22,16 +22,19 @@ def import_from_data_raw(
     data_raw_path: Path,
     progress_cb: Optional[Callable[[int, int, str, str], None]] = None,
     dry_run: bool = False,
+    library: str = "vng_insider",
 ) -> dict:
     """
-    Đọc data_raw/00_INDEX.json → upsert categories, upload+insert clips.
+    Đọc data_raw/00_INDEX.json → upsert categories + clips vào library `library`.
+    Library mặc định 'vng_insider' (đã được migration seed).
     Idempotent: chạy lại bao nhiêu lần cũng không trùng.
     """
     index_path = data_raw_path / "00_INDEX.json"
     if not index_path.exists():
         log.error("import: %s not found", index_path)
         raise FileNotFoundError(f"Không tìm thấy {index_path}")
-    log.info("import begin: source=%s dry_run=%s", index_path, dry_run)
+    log.info("import begin: source=%s library=%s dry_run=%s",
+             index_path, library, dry_run)
     with open(index_path, encoding="utf-8") as f:
         index = json.load(f)
 
@@ -52,13 +55,13 @@ def import_from_data_raw(
 
         with pg() as conn:
             cur = conn.execute("""
-                INSERT INTO categories (name, default_tag)
-                VALUES (%s, %s)
-                ON CONFLICT (name) DO NOTHING
-            """, (cat_name, default_tag))
+                INSERT INTO categories (library, name, default_tag)
+                VALUES (%s, %s, %s)
+                ON CONFLICT (library, name) DO NOTHING
+            """, (library, cat_name, default_tag))
             if cur.rowcount > 0:
                 categories_upserted += 1
-                log.info("category upsert: %s (tag=%s)", cat_name, default_tag)
+                log.info("category upsert: %s/%s (tag=%s)", library, cat_name, default_tag)
 
     # ── Bước 2: upsert clips ──
     clips = index.get("clips", [])
@@ -106,12 +109,13 @@ def import_from_data_raw(
         with pg() as conn:
             conn.execute("""
                 INSERT INTO videos
-                  (id, file, category, clip_tag, description, mood, duration_sec,
+                  (id, file, library, category, clip_tag, description, mood, duration_sec,
                    has_people, people_note_raw, resolution, notes, object_name, size_bytes)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             """, (
                 clip_id,
                 clip.get("file", ""),
+                library,
                 clip.get("category", ""),
                 clip.get("clip_tag", ""),
                 clip.get("description") or "",

@@ -18,6 +18,7 @@ from .categories import router as categories_router
 from .clips import router as clips_router
 from .editor import router as editor_router
 from .importer import import_from_data_raw, router as importer_router
+from .libraries import router as libraries_router
 from .migrations_runner import run_migrations
 from .pipeline import router as producer_router
 from .storage import init_buckets
@@ -26,6 +27,7 @@ __all__ = [
     "run_migrations",
     "init_buckets",
     "import_from_data_raw",
+    "libraries_router",
     "categories_router",
     "clips_router",
     "editor_router",

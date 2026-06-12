@@ -1,10 +1,1 @@
 .venv/
-.env
-data_raw/
-
-# Runtime artifacts
-.DS_Store
-runs/
-agents/publisher/tokens.json
-agents/creative/result/
-logs/

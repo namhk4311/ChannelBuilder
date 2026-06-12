@@ -24,12 +24,14 @@ from fastapi.staticfiles import StaticFiles
 
 from config import STATIC_DIR
 from logger import setup_logging
+from agents.creative import creative_router
 from agents.producer import (
     categories_router,
     clips_router,
     editor_router,
     importer_router,
     init_buckets,
+    libraries_router,
     producer_router,
     run_migrations,
 )
@@ -71,6 +73,8 @@ async def request_logger(request: Request, call_next):
 
 
 # Mount feature routers (mỗi feature 1 module trong video/)
+app.include_router(creative_router)
+app.include_router(libraries_router)
 app.include_router(categories_router)
 app.include_router(clips_router)
 app.include_router(importer_router)

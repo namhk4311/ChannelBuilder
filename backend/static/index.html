@@ -154,6 +154,11 @@
   /* Producer — script-to-video result grid */
   .produce-textarea { width: 100%; min-height: 140px; font: inherit; padding: 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); color: var(--text-1); resize: vertical; }
   .produce-textarea:focus { outline: 2px solid var(--vng); outline-offset: -1px; border-color: transparent; }
+  .script-display { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; min-height: 80px; font-size: 14px; line-height: 1.55; color: var(--text-1); white-space: pre-wrap; word-wrap: break-word; }
+  .script-display.empty { color: var(--text-3); font-style: italic; font-size: 13px; display: flex; align-items: center; justify-content: center; min-height: 80px; }
+  .script-meta { font-size: 11.5px; color: var(--text-3); margin-top: 6px; display: flex; gap: 12px; flex-wrap: wrap; }
+  .script-meta b { color: var(--text-2); }
+  button:disabled { opacity: 0.45; cursor: not-allowed; }
   .produce-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 10px; }
   .produce-cell { background: var(--surface); padding: 10px; border-radius: 8px; border: 1px solid var(--border); }
   .produce-cell-final { grid-column: 1 / -1; border-color: var(--vng); background: rgba(238, 87, 35, 0.04); }
@@ -176,6 +181,44 @@
   @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.55; } }
   .progress-steps { display: flex; justify-content: space-between; margin-top: 8px; font-size: 10px; color: var(--text-3); }
   .progress-steps span.active { color: var(--vng); font-weight: 700; }
+
+  /* Creative agent — ideas + script step */
+  .hidden { display: none; }
+  .idea-card { display: flex; gap: 10px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; margin-bottom: 6px; cursor: pointer; align-items: flex-start; }
+  .idea-card:hover { border-color: var(--vng); }
+  .idea-card:has(input:checked) { border-color: var(--vng); background: rgba(238, 87, 35, 0.05); }
+  .idea-card input { margin-top: 4px; accent-color: var(--vng); }
+  .idea-title { font-weight: 600; font-size: 13.5px; }
+  .idea-meta { font-size: 11.5px; color: var(--text-2); margin-top: 2px; }
+  .creative-preview { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; font-size: 12.5px; }
+  .creative-preview > div + div { margin-top: 6px; }
+  .creative-preview .label { font-weight: 700; color: var(--text-2); margin-right: 6px; }
+  .creative-warnings { margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--border); color: #c66; }
+  .creative-status { font-size: 12px; color: var(--text-3); align-self: center; }
+  .creative-status.err { color: var(--danger); }
+  .creative-status.ok { color: var(--vng); }
+  .creative-topic { width: 100%; box-sizing: border-box; padding: 12px 14px; font: inherit; font-size: 14.5px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); color: var(--text-1); }
+  .creative-topic:focus { outline: 2px solid var(--vng); outline-offset: -1px; border-color: transparent; }
+  .creative-suggest { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .creative-suggest button { font: inherit; font-size: 11.5px; padding: 4px 10px; border: 1px solid var(--border); border-radius: 999px; background: var(--surface); color: var(--text-2); cursor: pointer; }
+  .creative-suggest button:hover { border-color: var(--vng); color: var(--vng); }
+  .creative-options { display: flex; flex-wrap: wrap; gap: 18px; align-items: center; margin-top: 14px; font-size: 12.5px; color: var(--text-2); }
+  .creative-options > label { display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; }
+  .creative-options input[type=number] { width: 64px; padding: 6px 8px; font: inherit; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: var(--text-1); text-align: center; }
+  .creative-options input[type=number]:focus { outline: 2px solid var(--vng); outline-offset: -1px; border-color: transparent; }
+
+  /* Library selector — global header */
+  .library-bar { display: flex; align-items: center; gap: 14px; padding: 14px 18px; background: linear-gradient(135deg, var(--surface), var(--surface-2)); border: 1px solid var(--border); border-radius: 12px; margin-bottom: 16px; position: sticky; top: 8px; z-index: 5; box-shadow: 0 2px 8px rgba(0,0,0,0.04); }
+  .library-bar-label { font-size: 11px; font-weight: 700; color: var(--text-2); text-transform: uppercase; letter-spacing: 0.6px; }
+  .library-bar select { font: inherit; font-size: 14px; font-weight: 600; padding: 8px 14px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); color: var(--text-1); cursor: pointer; min-width: 200px; }
+  .library-bar select:focus { outline: 2px solid var(--vng); outline-offset: -1px; border-color: transparent; }
+  .library-bar .lib-meta { font-size: 12px; color: var(--text-3); margin-left: auto; }
+  .library-bar .lib-meta b { color: var(--text-1); }
+  .library-bar button { font: inherit; font-size: 12.5px; padding: 7px 12px; border: 1px solid var(--border); background: var(--bg); color: var(--text-1); border-radius: 7px; cursor: pointer; }
+  .library-bar button:hover { border-color: var(--vng); color: var(--vng); }
+  .new-lib-form { display: none; padding: 12px 18px; background: var(--bg); border: 1px dashed var(--border); border-radius: 10px; margin-bottom: 16px; gap: 10px; align-items: end; flex-wrap: wrap; }
+  .new-lib-form.show { display: flex; }
+  .new-lib-form input { font: inherit; padding: 8px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text-1); }
 
   /* Modal */
   .backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 50; display: flex; align-items: center; justify-content: center; padding: 24px; }
@@ -207,6 +250,30 @@
     <span class="badge">VNG INSIDER</span>
   </header>
   <div class="sub">Postgres · MinIO · ffmpeg · 32 clip từ data_raw</div>
+
+  <!-- Library selector — global, ảnh hưởng mọi card phía dưới -->
+  <div class="library-bar">
+    <span class="library-bar-label">Thư viện</span>
+    <select id="librarySelect" aria-label="Chọn thư viện"></select>
+    <button id="newLibBtn" title="Tạo thư viện mới">+ Thư viện</button>
+    <button id="deleteLibBtn" title="Xoá thư viện đang chọn (chỉ khi rỗng)" style="color:var(--danger)">🗑</button>
+    <span class="lib-meta" id="libMeta">—</span>
+  </div>
+  <div class="new-lib-form" id="newLibForm">
+    <div style="min-width:240px;">
+      <label class="field" style="font-size:11px">Tên thư viện</label>
+      <input id="newLibLabel" placeholder="vd: Du lịch Nha Trang" />
+      <div class="form-hint" style="font-size:10.5px; margin-top:4px;">
+        Slug tự sinh: <code id="newLibSlugPreview" style="color: var(--vng);">—</code>
+      </div>
+    </div>
+    <div style="flex:1; min-width:200px;">
+      <label class="field" style="font-size:11px">Mô tả (optional)</label>
+      <input id="newLibDesc" placeholder="Clip biển, khách sạn, ăn uống…" />
+    </div>
+    <button id="cancelNewLibBtn" class="secondary" style="padding:7px 14px;">Huỷ</button>
+    <button id="createLibBtn" style="padding:7px 14px;">Tạo</button>
+  </div>
 
   <!-- Card: Categories -->
   <section class="card" id="categoriesCard">
@@ -270,17 +337,60 @@
     </div>
   </section>
 
+  <!-- Card 3a: Creative — sinh kịch bản tự động -->
+  <section class="card">
+    <h2>3a. Sinh kịch bản <span style="opacity:0.6">· Creative agent</span></h2>
+
+    <label class="field" for="ideaTopic">Chủ đề video</label>
+    <input id="ideaTopic" class="creative-topic"
+           placeholder="VD: một ngày của Starter VNG, văn hoá ở canteen VNG Campus, chuyện đi onboarding..." />
+    <div class="creative-suggest" aria-label="Gợi ý nhanh">
+      <button type="button" data-topic="Một ngày của Starter VNG Campus">Ngày của Starter</button>
+      <button type="button" data-topic="Văn hoá làm việc ở VNG Campus">Văn hoá VNG</button>
+      <button type="button" data-topic="Canteen và café ở VNG Campus">Canteen / café</button>
+      <button type="button" data-topic="Onboarding tuần đầu tại VNG">Onboarding</button>
+      <button type="button" data-topic="Không gian mở và phòng họp ở VNG">Không gian mở</button>
+    </div>
+
+    <div class="creative-options">
+      <label>Số ý tưởng
+        <input id="ideaCount" type="number" value="5" min="1" max="10" />
+      </label>
+      <label>Thời lượng kịch bản
+        <input id="scriptDuration" type="number" value="48" min="30" max="60" />
+        <span style="color:var(--text-3)">giây (40–55)</span>
+      </label>
+      <span style="color:var(--text-3); font-size:11.5px;">· MaaS streaming ~30–60s</span>
+    </div>
+
+    <div class="form-actions" style="align-items:center;">
+      <span id="ideasStatus" class="creative-status"></span>
+      <button id="ideasBtn">💡 Sinh ý tưởng</button>
+    </div>
+
+    <div id="ideasList" class="hidden" style="margin-top:14px;"></div>
+
+    <div id="scriptStep" class="hidden form-actions" style="margin-top:12px; align-items:center;">
+      <span id="scriptStatus" class="creative-status"></span>
+      <button id="scriptBtn">✍️ Viết kịch bản từ ý tưởng đã chọn</button>
+    </div>
+
+    <div id="scriptPreview" class="hidden" style="margin-top:14px;"></div>
+  </section>
+
   <!-- Card: Producer (script → video tự động) -->
   <section class="card">
     <h2>3. Tạo video từ kịch bản <span style="opacity:0.6">· Producer agent</span></h2>
-    <textarea id="produceScript" class="produce-textarea"
-              placeholder="Paste kịch bản voice-over Việt vào đây.&#10;&#10;VD: Ngày đầu vào VNG, tôi không ngờ canteen lại đẹp đến vậy. Sảnh chính rộng, có nhiều cây xanh, các Starter ngồi làm việc rất thoải mái..."></textarea>
+    <div id="produceScriptDisplay" class="script-display empty">
+      ⬆ Sinh kịch bản ở card 3a trước. Kịch bản sẽ hiện ở đây và nút "Tạo video" sẽ enable.
+    </div>
+    <div id="produceScriptMeta" class="script-meta hidden"></div>
     <div class="form-actions" style="align-items: center; gap: 16px;">
       <label style="font-size: 13px; cursor: pointer; user-select: none; display: inline-flex; align-items: center; gap: 6px;">
         <input type="checkbox" id="produceSubs" checked style="accent-color: var(--vng); width: 16px; height: 16px;" />
         Phụ đề theo giọng đọc
       </label>
-      <button id="produceBtn">🎬 Tạo video</button>
+      <button id="produceBtn" disabled>🎬 Tạo video</button>
     </div>
     <div class="form-hint" style="margin-top: 6px;">
       Agent sẽ: TTS giọng đọc (+ timestamps) → LLM chọn clip → ghép + align → mux voice + phụ đề → trả 3 link (silent / voice / final).
@@ -368,11 +478,13 @@
 
 <script>
 // ─── State ───────────────────────────────────────────────────────────────────
-let categories = [];           // [{name, label, default_tag, description, video_count}]
+let libraries = [];            // [{name, label, description, category_count, video_count}]
+let currentLibrary = localStorage.getItem('currentLibrary') || 'vng_insider';
+let categories = [];           // [{name, label, library, default_tag, description, video_count}]
 let videos = [];               // current filtered list
 let allVideos = [];            // unfiltered, for cross-filter selection
 let selectedOrder = [];        // ordered video IDs
-let activeFilter = "";         // current category filter
+let activeFilter = "";         // current category filter (within currentLibrary)
 let editingVideoId = null;
 let editingCatName = null;
 
@@ -399,16 +511,42 @@ function toast(msg, type = '') {
 }
 
 // ─── Fetch helpers ───────────────────────────────────────────────────────────
+async function loadLibraries() {
+  const res = await fetch('/api/libraries');
+  libraries = await res.json();
+  // Nếu currentLibrary không còn tồn tại (đã bị xoá), fallback về library đầu tiên
+  if (libraries.length && !libraries.find(l => l.name === currentLibrary)) {
+    currentLibrary = libraries[0].name;
+    localStorage.setItem('currentLibrary', currentLibrary);
+  }
+  renderLibraryBar();
+}
+
+function renderLibraryBar() {
+  const sel = $('librarySelect');
+  sel.innerHTML = libraries.map(l => {
+    const label = l.label || l.name;
+    return `<option value="${esc(l.name)}">${esc(label)} (${l.category_count} cat · ${l.video_count} clip)</option>`;
+  }).join('');
+  sel.value = currentLibrary;
+
+  const cur = libraries.find(l => l.name === currentLibrary);
+  $('libMeta').innerHTML = cur
+    ? `Đang xem: <b>${esc(cur.name)}</b> · ${cur.category_count} category · ${cur.video_count} video`
+    : '—';
+}
+
 async function loadCategories() {
-  const res = await fetch('/api/categories');
+  const res = await fetch(`/api/categories?library=${encodeURIComponent(currentLibrary)}`);
   categories = await res.json();
   renderCategories();
   renderCategoryDropdowns();
 }
 
 async function loadVideos() {
-  const url = activeFilter ? `/api/videos?category=${encodeURIComponent(activeFilter)}` : '/api/videos';
-  const res = await fetch(url);
+  const params = new URLSearchParams({ library: currentLibrary });
+  if (activeFilter) params.set('category', activeFilter);
+  const res = await fetch('/api/videos?' + params.toString());
   videos = await res.json();
   if (!activeFilter) allVideos = videos;
   renderVideos();
@@ -599,7 +737,7 @@ $('createCatBtn').onclick = async () => {
     const res = await fetch('/api/categories', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, label }),
+      body: JSON.stringify({ name, label, library: currentLibrary }),
     });
     if (!res.ok) {
       const err = await res.json();
@@ -630,7 +768,7 @@ $('cancelEditCatBtn').onclick = () => $('editCatModal').classList.add('hidden');
 $('saveEditCatBtn').onclick = async () => {
   if (!editingCatName) return;
   try {
-    const res = await fetch('/api/categories/' + encodeURIComponent(editingCatName), {
+    const res = await fetch(`/api/categories/${encodeURIComponent(editingCatName)}?library=${encodeURIComponent(currentLibrary)}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -650,7 +788,7 @@ async function deleteCategory(name) {
   const c = categories.find(x => x.name === name);
   if (!confirm(`Xoá category "${name}"? (${c?.video_count || 0} video)`)) return;
   try {
-    const res = await fetch('/api/categories/' + encodeURIComponent(name), { method: 'DELETE' });
+    const res = await fetch(`/api/categories/${encodeURIComponent(name)}?library=${encodeURIComponent(currentLibrary)}`, { method: 'DELETE' });
     if (!res.ok) {
       const err = await res.json();
       throw new Error(err.detail || 'Delete failed');
@@ -677,6 +815,7 @@ $('uploadBtn').onclick = async () => {
 
   const fd = new FormData();
   fd.append('file', file);
+  fd.append('library', currentLibrary);
   fd.append('category', category);
   fd.append('description', $('upDesc').value);
   fd.append('mood', $('upMood').value);
@@ -805,10 +944,168 @@ function stopProducePoll() {
   btn.disabled = false; btn.textContent = '🎬 Tạo video';
 }
 
+/* ───────── Creative agent (card 3a) ───────── */
+
+let selectedIdea = null;
+let lastIdeas = [];
+let currentScript = '';   // script đang sẵn sàng cho Producer (set từ Creative)
+
+function setProducerScript(text, pkg) {
+  currentScript = (text || '').trim();
+  const display = $('produceScriptDisplay');
+  const meta = $('produceScriptMeta');
+  const btn = $('produceBtn');
+  if (currentScript) {
+    display.textContent = currentScript;
+    display.classList.remove('empty');
+    const wordCount = currentScript.split(/\s+/).filter(Boolean).length;
+    const charCount = currentScript.length;
+    const lineCount = (pkg && pkg.shot_list ? pkg.shot_list.length : null);
+    const parts = [
+      `<b>Từ:</b> ${wordCount}`,
+      `<b>Ký tự:</b> ${charCount}`,
+    ];
+    if (lineCount) parts.push(`<b>Dòng kịch bản:</b> ${lineCount}`);
+    meta.innerHTML = parts.join(' · ');
+    meta.classList.remove('hidden');
+    btn.disabled = false;
+  } else {
+    display.textContent = '⬆ Sinh kịch bản ở card 3a trước. Kịch bản sẽ hiện ở đây và nút "Tạo video" sẽ enable.';
+    display.classList.add('empty');
+    meta.classList.add('hidden');
+    btn.disabled = true;
+  }
+}
+
+function renderIdeas(ideas) {
+  lastIdeas = ideas;
+  const box = $('ideasList');
+  box.innerHTML = ideas.map((idea, i) => `
+    <label class="idea-card">
+      <input type="radio" name="ideaPick" value="${i}" />
+      <div>
+        <div class="idea-title">${escapeHtml(idea.title || '(no title)')}</div>
+        <div class="idea-meta">${escapeHtml([idea.pillar, idea.angle].filter(Boolean).join(' · '))}</div>
+      </div>
+    </label>
+  `).join('');
+  box.classList.remove('hidden');
+  $('scriptStep').classList.remove('hidden');
+  box.querySelectorAll('input[name=ideaPick]').forEach((el, idx) => {
+    el.addEventListener('change', () => { selectedIdea = lastIdeas[idx]; });
+  });
+  selectedIdea = null;
+  $('scriptPreview').classList.add('hidden');
+  $('scriptStatus').textContent = '';
+}
+
+function escapeHtml(s) {
+  return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function renderScriptPreview(pkg, warnings) {
+  const tags = (pkg.hashtags || []).map(escapeHtml).join(' ');
+  const warnHtml = warnings && warnings.length
+    ? `<div class="creative-warnings"><b>⚠ Warnings:</b><br>${warnings.map(w => '• ' + escapeHtml(w)).join('<br>')}</div>`
+    : '';
+  $('scriptPreview').innerHTML = `
+    <div class="creative-preview">
+      <div><span class="label">Hook:</span>${escapeHtml(pkg.text_hook || '')}</div>
+      <div><span class="label">Caption:</span>${escapeHtml(pkg.caption || '')}</div>
+      <div><span class="label">Hashtags:</span>${tags}</div>
+      ${warnHtml}
+    </div>
+  `;
+  $('scriptPreview').classList.remove('hidden');
+}
+
+// Suggestion chips → fill topic input + focus
+document.querySelectorAll('.creative-suggest button').forEach(btn => {
+  btn.addEventListener('click', () => {
+    $('ideaTopic').value = btn.dataset.topic || '';
+    $('ideaTopic').focus();
+  });
+});
+
+$('ideasBtn').onclick = async () => {
+  const topic = $('ideaTopic').value.trim();
+  const n_ideas = parseInt($('ideaCount').value, 10) || 5;
+  const target_duration_sec = parseInt($('scriptDuration').value, 10) || 48;
+  if (!topic) { toast('Nhập chủ đề trước', 'error'); return; }
+  if (topic.length < 2) { toast('Chủ đề quá ngắn', 'error'); return; }
+
+  const btn = $('ideasBtn');
+  const status = $('ideasStatus');
+  btn.disabled = true;
+  status.className = 'creative-status';
+  status.textContent = '⏳ Đang sinh ý tưởng… (LLM stream ~30-60s)';
+  // Reset downstream state
+  $('ideasList').classList.add('hidden');
+  $('scriptStep').classList.add('hidden');
+  $('scriptPreview').classList.add('hidden');
+
+  try {
+    const res = await fetch('/api/creative/ideas', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      // Truyền target_duration_sec để backend pre-gen script đúng độ dài
+      body: JSON.stringify({ topic, n_ideas, target_duration_sec }),
+    });
+    if (!res.ok) throw new Error((await res.json()).detail || 'HTTP ' + res.status);
+    const data = await res.json();
+    if (data.status !== 'ok') throw new Error(data.error || 'unknown');
+    if (!data.ideas || !data.ideas.length) throw new Error('LLM không trả ý tưởng nào');
+    renderIdeas(data.ideas);
+    status.className = 'creative-status ok';
+    status.innerHTML = `✓ ${data.ideas.length} ý tưởng — chọn 1 bên dưới  <span style="color:var(--text-3); font-weight:400">· đang pre-gen script nền 🔄</span>`;
+  } catch (e) {
+    status.className = 'creative-status err';
+    status.textContent = `❌ ${e.message}`;
+  } finally {
+    btn.disabled = false;
+  }
+};
+
+$('scriptBtn').onclick = async () => {
+  if (!selectedIdea) { toast('Chọn 1 ý tưởng trước', 'error'); return; }
+  const target_duration_sec = parseInt($('scriptDuration').value, 10) || 48;
+
+  const btn = $('scriptBtn');
+  const status = $('scriptStatus');
+  btn.disabled = true;
+  status.className = 'creative-status';
+  status.textContent = '⏳ Đang viết kịch bản… (~30-60s)';
+  $('scriptPreview').classList.add('hidden');
+
+  try {
+    const res = await fetch('/api/creative/script', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ idea: selectedIdea, target_duration_sec }),
+    });
+    if (!res.ok) throw new Error((await res.json()).detail || 'HTTP ' + res.status);
+    const data = await res.json();
+    if (data.status !== 'ok') throw new Error(data.error || 'unknown');
+    const pkg = data.package || {};
+    setProducerScript(pkg.script || '', pkg);
+    renderScriptPreview(pkg, data.warnings || []);
+    status.className = 'creative-status ok';
+    status.textContent = '✓ Kịch bản đã sẵn ở card 3 — bấm 🎬 Tạo video';
+    $('produceScriptDisplay').scrollIntoView({ behavior: 'smooth', block: 'center' });
+  } catch (e) {
+    status.className = 'creative-status err';
+    status.textContent = `❌ ${e.message}`;
+  } finally {
+    btn.disabled = false;
+  }
+};
+
+/* ───────── Producer (card 3) ───────── */
+
 $('produceBtn').onclick = async () => {
-  const script = $('produceScript').value.trim();
-  if (!script) { toast('Cần script', 'error'); return; }
-  if (script.length < 10) { toast('Script quá ngắn (≥10 chars)', 'error'); return; }
+  const script = currentScript;
+  if (!script) { toast('Sinh kịch bản ở card 3a trước', 'error'); return; }
+  if (script.length < 10) { toast('Kịch bản quá ngắn (≥10 chars)', 'error'); return; }
 
   const btn = $('produceBtn');
   btn.disabled = true; btn.textContent = '⏳ Đang tạo...';
@@ -818,7 +1115,11 @@ $('produceBtn').onclick = async () => {
     const res = await fetch('/api/produce', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ script, subtitles: $('produceSubs').checked }),
+      body: JSON.stringify({
+        script,
+        subtitles: $('produceSubs').checked,
+        library: currentLibrary,
+      }),
     });
     if (!res.ok) throw new Error((await res.json()).detail || 'Failed');
     const { job_id } = await res.json();
@@ -956,8 +1257,86 @@ $('concatBtn').onclick = async () => {
 window.toggle = toggle;
 window.filterCategory = filterCategory;
 
+// ─── Library selector handlers ───────────────────────────────────────────────
+$('librarySelect').onchange = async (e) => {
+  currentLibrary = e.target.value;
+  localStorage.setItem('currentLibrary', currentLibrary);
+  activeFilter = '';
+  selectedOrder = [];
+  await Promise.all([loadCategories(), loadVideos()]);
+  renderLibraryBar();
+  toast(`Đã chuyển sang library "${currentLibrary}"`, 'success');
+};
+
+$('newLibBtn').onclick = () => {
+  $('newLibForm').classList.add('show');
+  $('newLibLabel').focus();
+};
+$('cancelNewLibBtn').onclick = () => {
+  $('newLibForm').classList.remove('show');
+  $('newLibLabel').value = '';
+  $('newLibDesc').value = '';
+  $('newLibSlugPreview').textContent = '—';
+};
+
+// Live preview slug khi user gõ tên thư viện
+$('newLibLabel').oninput = () => {
+  $('newLibSlugPreview').textContent = slugify($('newLibLabel').value) || '—';
+};
+
+$('createLibBtn').onclick = async () => {
+  const label = $('newLibLabel').value.trim();
+  if (!label) { toast('Cần nhập tên thư viện', 'error'); return; }
+  const name = slugify(label);
+  if (!name || name.length < 2) {
+    toast('Tên thư viện không sinh được slug hợp lệ (cần ≥2 ký tự chữ/số)', 'error');
+    return;
+  }
+  const description = $('newLibDesc').value.trim();
+  try {
+    const res = await fetch('/api/libraries', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, label, description }),
+    });
+    if (!res.ok) throw new Error((await res.json()).detail || 'Failed');
+    toast(`Đã tạo library "${label}"`, 'success');
+    // Tự chuyển sang library mới
+    currentLibrary = name;
+    localStorage.setItem('currentLibrary', currentLibrary);
+    $('cancelNewLibBtn').click();
+    await loadLibraries();
+    await Promise.all([loadCategories(), loadVideos()]);
+  } catch (e) {
+    toast('Lỗi: ' + e.message, 'error');
+  }
+};
+
+$('deleteLibBtn').onclick = async () => {
+  const cur = libraries.find(l => l.name === currentLibrary);
+  if (!cur) return;
+  if (cur.category_count > 0 || cur.video_count > 0) {
+    toast(`Library "${cur.name}" còn ${cur.category_count} cat + ${cur.video_count} video — xoá hết trước`, 'error');
+    return;
+  }
+  if (!confirm(`Xoá library "${cur.name}"? (rỗng — chỉ remove metadata)`)) return;
+  try {
+    const res = await fetch('/api/libraries/' + encodeURIComponent(cur.name), { method: 'DELETE' });
+    if (!res.ok) throw new Error((await res.json()).detail || 'Failed');
+    toast(`Đã xoá library "${cur.name}"`, 'success');
+    currentLibrary = 'vng_insider';  // fallback
+    localStorage.setItem('currentLibrary', currentLibrary);
+    await loadLibraries();
+    await Promise.all([loadCategories(), loadVideos()]);
+  } catch (e) {
+    toast('Lỗi: ' + e.message, 'error');
+  }
+};
+
 // ─── Init ────────────────────────────────────────────────────────────────────
 (async () => {
+  // Load libraries FIRST — currentLibrary có thể được điều chỉnh nếu lib đã bị xoá
+  await loadLibraries();
   await Promise.all([loadCategories(), loadVideos(), loadMoods()]);
 })();
 </script>

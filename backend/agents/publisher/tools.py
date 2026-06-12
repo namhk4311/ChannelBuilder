@@ -27,9 +27,13 @@ can decide what to do next.
 
 from __future__ import annotations
 
+import logging
+import time
 from typing import Optional
 
 from .client import TikTokClient, TikTokError
+
+log = logging.getLogger(__name__)
 
 _client: Optional[TikTokClient] = None
 
@@ -37,6 +41,7 @@ _client: Optional[TikTokClient] = None
 def _get_client() -> TikTokClient:
     global _client
     if _client is None:
+        log.info("client · khởi tạo TikTokClient lần đầu")
         _client = TikTokClient()
     return _client
 
@@ -45,25 +50,38 @@ def _get_client() -> TikTokClient:
 
 def publish_video(video_path: str, caption: str) -> dict:
     """Publish a video file to TikTok. Blocks until processing completes."""
+    t0 = time.monotonic()
+    log.info("publish · BẮT ĐẦU · path=%r caption=%r…", video_path, (caption or "")[:60])
     try:
         result = _get_client().post_video(video_path, caption)
+        log.info("publish · XONG · %s video_id=%s publish_id=%s (%.1fs)",
+                 result.get("status"), result.get("video_id"),
+                 result.get("publish_id"), time.monotonic() - t0)
         return {**result, "error": None}
     except TikTokError as e:
+        log.warning("publish · TikTokError sau %.1fs: %s", time.monotonic() - t0, e)
         return {"status": "failed", "publish_id": None, "video_id": None,
                 "error": str(e)}
     except Exception as e:  # noqa: BLE001 — never crash the orchestrator
+        log.exception("publish · LỖI bất ngờ sau %.1fs", time.monotonic() - t0)
         return {"status": "failed", "publish_id": None, "video_id": None,
                 "error": f"unexpected: {e}"}
 
 
 def get_video_metrics(video_ids: list[str]) -> dict:
     """Fetch view/like/comment/share counts for previously published videos."""
+    t0 = time.monotonic()
+    log.info("metrics · query %d video_id", len(video_ids or []))
     try:
         videos = _get_client().get_video_metrics(video_ids)
+        log.info("metrics · XONG · %d video trả về (%.1fs)",
+                 len(videos), time.monotonic() - t0)
         return {"status": "ok", "videos": videos, "error": None}
     except TikTokError as e:
+        log.warning("metrics · TikTokError sau %.1fs: %s", time.monotonic() - t0, e)
         return {"status": "failed", "videos": [], "error": str(e)}
     except Exception as e:  # noqa: BLE001
+        log.exception("metrics · LỖI bất ngờ sau %.1fs", time.monotonic() - t0)
         return {"status": "failed", "videos": [], "error": f"unexpected: {e}"}
 
 

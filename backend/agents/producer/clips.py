@@ -8,7 +8,7 @@ import uuid
 from pathlib import Path
 from typing import Optional
 
-from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile
 from minio.error import S3Error
 from pydantic import BaseModel
 
@@ -27,6 +27,7 @@ router = APIRouter(tags=["clips"])
 @router.post("/api/videos")
 async def upload_video(
     file: UploadFile = File(...),
+    library: str = Form(...),
     category: str = Form(...),
     description: str = Form(""),
     mood: str = Form(""),
@@ -35,22 +36,22 @@ async def upload_video(
     clip_tag: Optional[str] = Form(None),   # nội bộ, auto-derive nếu không truyền
     people_note_raw: str = Form(""),         # legacy import field, không expose UI
 ):
-    # Validate FK + lấy default_tag của category nếu user không cung cấp clip_tag
+    # Validate composite FK (library, category) + lấy default_tag
     with pg() as conn:
         cat = conn.execute(
-            "SELECT default_tag FROM categories WHERE name = %s", (category,)
+            "SELECT default_tag FROM categories WHERE library = %s AND name = %s",
+            (library, category),
         ).fetchone()
         if not cat:
-            log.warning("upload rejected: category '%s' not found", category)
-            raise HTTPException(
-                400,
-                f"Category '{category}' chưa tồn tại. Tạo trước qua POST /api/categories.",
-            )
+            log.warning("upload rejected: '%s/%s' not found", library, category)
+            raise HTTPException(400,
+                f"Category '{category}' chưa tồn tại trong library '{library}'. "
+                "Tạo qua POST /api/categories trước.")
         if not clip_tag:
-            clip_tag = cat["default_tag"] or category   # fallback tuyệt đối
+            clip_tag = cat["default_tag"] or category
 
-    log.info("upload start: file=%s size_hint=%s category=%s tag=%s (auto=%s)",
-             file.filename, file.size, category, clip_tag, "yes" if not clip_tag else "no")
+    log.info("upload start: file=%s size_hint=%s lib=%s cat=%s tag=%s",
+             file.filename, file.size, library, category, clip_tag)
 
     video_id = uuid.uuid4().hex[:12]
     ext = Path(file.filename or "").suffix or ".mp4"
@@ -77,10 +78,10 @@ async def upload_video(
     with pg() as conn:
         conn.execute("""
             INSERT INTO videos
-              (id, file, category, clip_tag, description, mood, duration_sec,
+              (id, file, library, category, clip_tag, description, mood, duration_sec,
                has_people, people_note_raw, resolution, notes, object_name, size_bytes)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-        """, (video_id, f"upload/{file.filename}", category, clip_tag,
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        """, (video_id, f"upload/{file.filename}", library, category, clip_tag,
               description, mood, duration, has_people_bool, people_note_raw,
               resolution, notes, object_name, len(content)))
 
@@ -97,17 +98,25 @@ async def upload_video(
 # ─── List ────────────────────────────────────────────────────────────────────
 
 @router.get("/api/videos")
-def list_videos(category: Optional[str] = None):
+def list_videos(
+    library: Optional[str] = Query(None, description="Filter theo library"),
+    category: Optional[str] = Query(None, description="Filter theo category (nội bộ library)"),
+):
+    """List videos. Có thể filter theo library và/hoặc category."""
+    conditions = []
+    params = []
+    if library:
+        conditions.append("library = %s")
+        params.append(library)
+    if category:
+        conditions.append("category = %s")
+        params.append(category)
+    where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
     with pg() as conn:
-        if category:
-            rows = conn.execute(
-                "SELECT * FROM videos WHERE category = %s ORDER BY uploaded_at DESC",
-                (category,),
-            ).fetchall()
-        else:
-            rows = conn.execute(
-                "SELECT * FROM videos ORDER BY uploaded_at DESC"
-            ).fetchall()
+        rows = conn.execute(
+            f"SELECT * FROM videos {where} ORDER BY uploaded_at DESC",
+            params,
+        ).fetchall()
     for r in rows:
         if r.get("uploaded_at"):
             r["uploaded_at"] = r["uploaded_at"].isoformat()
@@ -155,14 +164,21 @@ def update_video(video_id: str, body: VideoUpdate):
     log.info("patch video %s: fields=%s", video_id, list(payload.keys()))
 
     if "category" in payload:
+        # Đổi category trong cùng library hiện tại của video
         with pg() as conn:
+            video_lib = conn.execute(
+                "SELECT library FROM videos WHERE id = %s", (video_id,)
+            ).fetchone()
+            if not video_lib:
+                raise HTTPException(404, "Video không tồn tại")
             row = conn.execute(
-                "SELECT default_tag FROM categories WHERE name = %s",
-                (payload["category"],),
+                "SELECT default_tag FROM categories WHERE library = %s AND name = %s",
+                (video_lib["library"], payload["category"]),
             ).fetchone()
             if not row:
-                raise HTTPException(400, f"Category '{payload['category']}' chưa tồn tại")
-            # Đổi category → đồng bộ clip_tag theo default_tag mới (auto nội bộ)
+                raise HTTPException(400,
+                    f"Category '{payload['category']}' không có trong library "
+                    f"'{video_lib['library']}' (video hiện tại)")
             payload["clip_tag"] = row["default_tag"] or payload["category"]
 
     set_clause = ", ".join(f"{k} = %s" for k in payload.keys())

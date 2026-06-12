@@ -100,6 +100,8 @@ Rules:
 class ProduceRequest(BaseModel):
     script: str = Field(..., min_length=10, max_length=4000)
     subtitles: bool = True   # burn phụ đề theo giọng đọc vào final
+    library: str = Field("vng_insider", min_length=1, max_length=80,
+                         description="Library scope — LLM chỉ pick clip trong lib này")
 
 
 # ─── Helpers ────────────────────────────────────────────────────────────────
@@ -347,15 +349,16 @@ def build_subtitle_overlays(alignment, workdir: Path) -> Optional[list[dict]]:
 
 # ─── STEP 2: LLM clip selection ─────────────────────────────────────────────
 
-def list_all_clips_for_llm() -> list[dict]:
-    """Catalog clip cho LLM. Bỏ field không cần (file/object_name/size)."""
+def list_all_clips_for_llm(library: str) -> list[dict]:
+    """Catalog clip cho LLM — chỉ video trong `library`. Bỏ field không cần."""
     with pg() as conn:
         rows = conn.execute("""
             SELECT id, category, clip_tag, description, mood, duration_sec,
                    has_people, resolution, notes
             FROM videos
+            WHERE library = %s
             ORDER BY category, id
-        """).fetchall()
+        """, (library,)).fetchall()
     return [dict(r) for r in rows]
 
 
@@ -683,10 +686,14 @@ def produce_from_script(
         _step_done(1, "tts", timings["1 tts"], summaries["1 tts"])
         _p(20, f"[1/6] Giọng đọc xong ({voice_duration:.1f}s)")
 
-        # ── STEP 2: LLM clip pick ───────────────────────────────────────────
-        _p(22, "[2/6] LLM đang chọn clip phù hợp kịch bản...")
+        # ── STEP 2: LLM clip pick (scope theo library) ──────────────────────
+        _p(22, f"[2/6] LLM đang chọn clip phù hợp kịch bản (library={library})...")
         t = time.monotonic()
-        clips_catalog = list_all_clips_for_llm()
+        clips_catalog = list_all_clips_for_llm(library)
+        if not clips_catalog:
+            raise HTTPException(400,
+                f"Library '{library}' không có video nào — upload trước hoặc đổi library.")
+        _step(2, "llm-pick", f"library={library} · catalog={len(clips_catalog)} clip")
         selected_ids = llm_select_clips(script, voice_duration, clips_catalog)
         timings["2 llm-pick"] = time.monotonic() - t
         summaries["2 llm-pick"] = f"{len(selected_ids)} clips picked"
@@ -784,7 +791,8 @@ def produce_from_script(
 
 # ─── Endpoints (job + polling cho progress bar) ─────────────────────────────
 
-def _run_job(job_id: str, script: str, subtitles: bool = True) -> None:
+def _run_job(job_id: str, script: str, subtitles: bool = True,
+             library: str = "vng_insider") -> None:
     """Chạy pipeline trong thread nền, cập nhật JOBS[job_id] theo tiến độ."""
     def cb(percent: int, message: str) -> None:
         job = JOBS.get(job_id)
@@ -817,10 +825,13 @@ def produce_endpoint(body: ProduceRequest):
         "error": None,
     }
     _jobs_evict()
-    threading.Thread(target=_run_job, args=(job_id, body.script, body.subtitles),
-                     daemon=True, name=f"produce-{job_id}").start()
-    log.info("produce job %s queued (script %d chars, subtitles=%s)",
-             job_id, len(body.script), body.subtitles)
+    threading.Thread(
+        target=_run_job,
+        args=(job_id, body.script, body.subtitles, body.library),
+        daemon=True, name=f"produce-{job_id}",
+    ).start()
+    log.info("produce job %s queued (script %d chars, subtitles=%s, library=%s)",
+             job_id, len(body.script), body.subtitles, body.library)
     return {"job_id": job_id}
 
 
