@@ -297,6 +297,20 @@
     </div>
   </section>
 
+  <!-- Card: Import data_raw → currentLibrary (bulk seed) -->
+  <section class="card">
+    <h2>1b. Import nhanh <span style="opacity:0.6">· từ <code>data_raw/00_INDEX.json</code></span></h2>
+    <div class="form-hint" style="margin-bottom:10px;">
+      Đẩy toàn bộ video + metadata trong <code>backend/data_raw/</code> vào library <b id="importTargetLib">vng_insider</b>.
+      Idempotent — chạy lại không trùng. Categories tự tạo nếu chưa có.
+    </div>
+    <div class="form-actions" style="align-items:center; justify-content:flex-start; gap:14px;">
+      <button id="importBtn">📥 Import vào library này</button>
+      <span id="importStatus" class="creative-status"></span>
+    </div>
+    <div id="importResult" class="hidden" style="margin-top:12px;"></div>
+  </section>
+
   <!-- Card: Upload -->
   <section class="card">
     <h2>2. Upload clip mới</h2>
@@ -534,6 +548,8 @@ function renderLibraryBar() {
   $('libMeta').innerHTML = cur
     ? `Đang xem: <b>${esc(cur.name)}</b> · ${cur.category_count} category · ${cur.video_count} video`
     : '—';
+  const tgt = $('importTargetLib');
+  if (tgt) tgt.textContent = currentLibrary;
 }
 
 async function loadCategories() {
@@ -1309,6 +1325,51 @@ $('createLibBtn').onclick = async () => {
     await Promise.all([loadCategories(), loadVideos()]);
   } catch (e) {
     toast('Lỗi: ' + e.message, 'error');
+  }
+};
+
+// ─── Import data_raw → currentLibrary ────────────────────────────────────────
+$('importBtn').onclick = async () => {
+  if (!confirm(`Import toàn bộ data_raw/ vào library "${currentLibrary}"?\n(Idempotent — file đã có sẽ skip)`)) return;
+  const btn = $('importBtn');
+  const status = $('importStatus');
+  const out = $('importResult');
+  btn.disabled = true;
+  btn.textContent = '⏳ Đang import...';
+  status.className = 'creative-status';
+  status.textContent = 'Đang upload + insert (có thể vài chục giây nếu nhiều file mới)...';
+  out.classList.add('hidden');
+
+  try {
+    const res = await fetch('/api/import-data-raw', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ library: currentLibrary }),
+    });
+    if (!res.ok) throw new Error((await res.json()).detail || 'HTTP ' + res.status);
+    const data = await res.json();
+    status.className = 'creative-status ok';
+    status.textContent = '✓ Xong';
+    out.innerHTML = `
+      <div class="creative-preview">
+        <div><span class="label">Categories upserted:</span>${data.categories_upserted}</div>
+        <div><span class="label">Videos imported:</span>${data.videos_imported}</div>
+        <div><span class="label">Videos skipped (đã có):</span>${data.videos_skipped}</div>
+        <div><span class="label">Missing files:</span>${(data.missing_files || []).length}</div>
+        ${(data.missing_files || []).length ? `<div style="margin-top:6px; color:#c66; font-size:11px;">${data.missing_files.map(esc).join('<br>')}</div>` : ''}
+      </div>
+    `;
+    out.classList.remove('hidden');
+    // Refresh data — categories + videos + library counts
+    await loadLibraries();
+    await Promise.all([loadCategories(), loadVideos()]);
+    toast(`Import OK · +${data.videos_imported} video, +${data.categories_upserted} cat`, 'success');
+  } catch (e) {
+    status.className = 'creative-status err';
+    status.textContent = `❌ ${e.message}`;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '📥 Import vào library này';
   }
 };
 

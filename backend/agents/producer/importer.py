@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Callable, Optional
 
 from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel, Field
 
 from config import BUCKET_SOURCES, DATA_RAW_PATH
 
@@ -145,9 +146,22 @@ def import_from_data_raw(
     }
 
 
+class ImportRequest(BaseModel):
+    library: str = Field("vng_insider", min_length=1, max_length=80,
+                         description="Library đích — categories + videos nhập vào đây")
+
+
 @router.post("/api/import-data-raw")
-def import_data_raw_endpoint():
+def import_data_raw_endpoint(body: ImportRequest = ImportRequest()):
+    # Validate library tồn tại trước khi import (tránh FK violation giữa chừng)
+    with pg() as conn:
+        lib = conn.execute(
+            "SELECT name FROM libraries WHERE name = %s", (body.library,)
+        ).fetchone()
+        if not lib:
+            raise HTTPException(400,
+                f"Library '{body.library}' chưa tồn tại — tạo trước qua POST /api/libraries.")
     try:
-        return import_from_data_raw(DATA_RAW_PATH)
+        return import_from_data_raw(DATA_RAW_PATH, library=body.library)
     except FileNotFoundError as e:
         raise HTTPException(400, str(e))
