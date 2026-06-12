@@ -16,9 +16,7 @@ from pathlib import Path
 
 from config import DATA_RAW_PATH
 from logger import setup_logging
-from video_editor.db import init_db
-from video_editor.importer import import_from_data_raw
-from video_editor.storage import init_buckets
+from agents.producer import import_from_data_raw, init_buckets, run_migrations
 
 
 def main() -> None:
@@ -38,7 +36,7 @@ def main() -> None:
         sys.exit(2)
 
     init_buckets()
-    init_db()
+    run_migrations()
 
     result = import_from_data_raw(data_raw, dry_run=args.dry_run)
 

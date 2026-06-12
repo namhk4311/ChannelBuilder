@@ -44,12 +44,23 @@ ELEVENLABS_API_KEY  = os.getenv("ELEVENLABS_API_KEY")  # required for producer
 ELEVENLABS_VOICE_ID = os.getenv("ELEVENLABS_VOICE_ID", "JBFqnCBsd6RMkjVDRZzb")
 ELEVENLABS_MODEL_ID = os.getenv("ELEVENLABS_MODEL_ID", "eleven_v3")
 
-# ─── VNGCloud AI Platform (OpenAI-compatible) — chọn clip cho Producer ──────
+# ─── VNGCloud AI Platform (OpenAI-compatible) — share Producer + Creative ──
 # Dùng `or` thay vì arg default vì .env có thể set key=<empty> → trả về ''
 # (không trigger default của os.getenv). `or` xử lý cả None lẫn ''.
 AI_PLATFORM_BASE_URL = (
     os.getenv("AI_PLATFORM_BASE_URL")
     or "https://maas-llm-aiplatform-hcm.api.vngcloud.vn/v1"
 )
-AI_PLATFORM_API_KEY  = os.getenv("AI_PLATFORM_API_KEY")  # required for producer
-AI_PLATFORM_MODEL    = os.getenv("AI_PLATFORM_MODEL") or "deepseek/deepseek-v4-flash"
+AI_PLATFORM_API_KEY = os.getenv("AI_PLATFORM_API_KEY")  # required for producer + creative
+AI_PLATFORM_MODEL   = os.getenv("AI_PLATFORM_MODEL")   or "deepseek/deepseek-v4-flash"  # Producer
+CREATIVE_MODEL      = os.getenv("CREATIVE_MODEL")      or "minimax/minimax-m2.5"        # Creative
+
+# ─── TikTok API — Publisher agent ────────────────────────────────────────────
+TIKTOK_CLIENT_KEY    = os.getenv("TIKTOK_CLIENT_KEY")
+TIKTOK_CLIENT_SECRET = os.getenv("TIKTOK_CLIENT_SECRET")
+TIKTOK_REDIRECT_URI  = os.getenv("TIKTOK_REDIRECT_URI")
+TIKTOK_SCOPES        = os.getenv("TIKTOK_SCOPES") or "user.info.basic,video.publish"
+
+# ─── Logging ─────────────────────────────────────────────────────────────────
+LOG_LEVEL = os.getenv("LOG_LEVEL") or "INFO"
+LOG_FILE  = os.getenv("LOG_FILE")   # None nếu không set

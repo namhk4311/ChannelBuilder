@@ -1,0 +1,44 @@
+{
+  "clips": [
+    {
+      "id": "clip_001",
+      "file": "kho/campus_sanh_01.mp4",
+      "scene": "Sảnh chính VNG Campus, người qua lại giờ cao điểm",
+      "tags": ["campus", "sảnh", "đông người"],
+      "mood": "năng động",
+      "duration_sec": 12
+    },
+    {
+      "id": "clip_002",
+      "file": "kho/canteen_01.mp4",
+      "scene": "Canteen giờ trưa, quầy đồ ăn",
+      "tags": ["canteen", "đồ ăn", "giờ trưa"],
+      "mood": "vui vẻ",
+      "duration_sec": 15
+    },
+    {
+      "id": "clip_003",
+      "file": "kho/vanphong_goc_lam_viec_01.mp4",
+      "scene": "Góc làm việc, Starter đang code, 2 màn hình",
+      "tags": ["văn phòng", "làm việc", "dev"],
+      "mood": "tập trung",
+      "duration_sec": 10
+    },
+    {
+      "id": "clip_004",
+      "file": "kho/ngoai_canh_campus_01.mp4",
+      "scene": "Toàn cảnh VNG Campus từ ngoài, trời nắng",
+      "tags": ["campus", "ngoại cảnh", "toàn cảnh"],
+      "mood": "hoành tráng",
+      "duration_sec": 8
+    },
+    {
+      "id": "clip_005",
+      "file": "kho/su_kien_01.mp4",
+      "scene": "Sự kiện nội bộ, đông Starter, sân khấu",
+      "tags": ["sự kiện", "đông người", "văn hoá"],
+      "mood": "sôi động",
+      "duration_sec": 14
+    }
+  ]
+}

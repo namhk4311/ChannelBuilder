@@ -16,9 +16,10 @@ Cách dùng trong module:
 from __future__ import annotations
 
 import logging
-import os
 import sys
 from pathlib import Path
+
+from config import LOG_FILE, LOG_LEVEL
 
 _CONFIGURED = False
 
@@ -33,7 +34,7 @@ def setup_logging() -> None:
     if _CONFIGURED:
         return
 
-    level = os.getenv("LOG_LEVEL", "INFO").upper()
+    level = LOG_LEVEL.upper()
 
     fmt = logging.Formatter(
         "%(asctime)s [%(levelname)-5s] %(name)-22s | %(message)s",
@@ -48,10 +49,9 @@ def setup_logging() -> None:
     sh.setFormatter(fmt)
     root.addHandler(sh)
 
-    # File handler — chỉ khi LOG_FILE được set
-    log_file = os.getenv("LOG_FILE")
-    if log_file:
-        log_path = Path(log_file)
+    # File handler — chỉ khi LOG_FILE được set trong config/.env
+    if LOG_FILE:
+        log_path = Path(LOG_FILE)
         log_path.parent.mkdir(parents=True, exist_ok=True)
         fh = logging.FileHandler(log_path, encoding="utf-8")
         fh.setFormatter(fmt)

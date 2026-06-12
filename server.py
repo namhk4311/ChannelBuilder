@@ -24,13 +24,15 @@ from fastapi.staticfiles import StaticFiles
 
 from config import STATIC_DIR
 from logger import setup_logging
-from video_editor.categories import router as categories_router
-from video_editor.clips import router as clips_router
-from video_editor.db import init_db
-from video_editor.editor import router as editor_router
-from video_editor.importer import router as importer_router
-from video_editor.producer import router as producer_router
-from video_editor.storage import init_buckets
+from agents.producer import (
+    categories_router,
+    clips_router,
+    editor_router,
+    importer_router,
+    init_buckets,
+    producer_router,
+    run_migrations,
+)
 
 # Setup logging ngay khi module load — uvicorn import server sẽ trigger
 setup_logging()
@@ -41,7 +43,7 @@ log = logging.getLogger("server")
 async def lifespan(_: FastAPI):
     log.info("──────── startup ────────")
     init_buckets()
-    init_db()
+    run_migrations()
     log.info("ready · listening on http://localhost:8000")
     yield
     log.info("──────── shutdown ────────")
