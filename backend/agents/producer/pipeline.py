@@ -647,6 +647,7 @@ def produce_from_script(
 
     progress_cb(percent, message) — gọi tại mỗi mốc để UI vẽ progress bar.
     subtitles — burn phụ đề theo giọng đọc vào final (cần timestamps từ TTS).
+    library — scope LLM pick chỉ thấy clip trong library này.
     """
     run_id = uuid.uuid4().hex[:12]
     workdir = Path(tempfile.mkdtemp(prefix=f"produce_{run_id}_"))
