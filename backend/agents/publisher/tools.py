@@ -46,6 +46,12 @@ def _get_client() -> TikTokClient:
     return _client
 
 
+def reset_client() -> None:
+    """Bỏ client cache — gọi sau khi tokens.json thay đổi (OAuth lại từ UI)."""
+    global _client
+    _client = None
+
+
 # ---------------------------------------------------------------- tools
 
 def publish_video(video_path: str, caption: str) -> dict:

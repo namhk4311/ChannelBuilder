@@ -26,6 +26,7 @@ import { ApprovalGate } from '@/components/workflow/approval-gate'
 import { PipelineFlow } from '@/components/workflow/pipeline-flow'
 import { RunStepList } from '@/components/workflow/run-step-list'
 import { StepStatusChip } from '@/components/workflow/step-status-chip'
+import { TikTokConnectCard } from '@/components/workflow/tiktok-connect-card'
 
 const RUN_STATUS_AS_STEP: Record<RunStatus, StepStatus> = {
   running: 'running',
@@ -116,6 +117,9 @@ export default function WorkflowPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Kết nối TikTok cho Publisher [D] — OAuth 1 lần từ UI */}
+      <TikTokConnectCard />
 
       {/* Pipeline */}
       {agents.isLoading && <Skeleton className="h-36 w-full" />}
