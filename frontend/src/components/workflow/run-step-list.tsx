@@ -61,9 +61,12 @@ function StepTimer({ step }: { step: RunStep }) {
  * Step đang chạy hiển thị stopwatch live; Producer kèm progress bar % từ job 6 bước.
  */
 export function RunStepList({ steps }: { steps: RunStep[] }) {
+  // Tạm ẩn step Human gate khỏi timeline — gate vẫn chạy (ApprovalGate card duyệt).
+  // Bỏ filter này để hiện lại step.
+  const visibleSteps = steps.filter((s) => s.id !== 'human_approval')
   return (
     <Accordion type="multiple" className="w-full">
-      {steps.map((step) => {
+      {visibleSteps.map((step) => {
         const expandable = step.output != null || step.error != null
         const showProgress = step.status === 'running' && step.progress != null
         return (

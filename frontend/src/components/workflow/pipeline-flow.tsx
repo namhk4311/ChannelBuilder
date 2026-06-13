@@ -4,7 +4,10 @@ import { cn } from '@/lib/utils'
 import type { Agent, RunStep, StepStatus } from '@/api/workflow'
 import { StepStatusChip } from '@/components/workflow/step-status-chip'
 
-const PIPELINE_ORDER = ['scout', 'creative', 'producer', 'orchestrator', 'publisher']
+// Human gate ('orchestrator') tạm ẩn khỏi rail — gate vẫn chạy bình thường
+// (ApprovalGate card vẫn dừng pipeline chờ duyệt). Thêm lại 'orchestrator' giữa
+// 'producer' và 'publisher' để hiện lại node.
+const PIPELINE_ORDER = ['scout', 'creative', 'producer', 'publisher']
 
 /** Gộp trạng thái các step của 1 agent trong run hiện tại thành 1 trạng thái node. */
 function agentRunStatus(steps: RunStep[]): StepStatus | null {

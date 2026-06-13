@@ -33,7 +33,7 @@ function ShellNav() {
       <Tabs value={section} onValueChange={(v) => navigate(SECTION_PATHS[v] ?? '/')}>
         <TabsList>
           <TabsTrigger value="workflow">Workflow</TabsTrigger>
-          <TabsTrigger value="studio">Tạo video</TabsTrigger>
+          {/* <TabsTrigger value="studio">Tạo video</TabsTrigger> */}
           <TabsTrigger value="warehouse">Kho clip</TabsTrigger>
         </TabsList>
       </Tabs>
