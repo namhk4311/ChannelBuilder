@@ -9,7 +9,7 @@ POST /api/workflow/runs/{run_id}/approval — human gate: duyệt / từ chối 
 from __future__ import annotations
 
 import logging
-from typing import Literal, Optional
+from typing import Optional
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
@@ -22,8 +22,7 @@ router = APIRouter(prefix="/api/workflow", tags=["workflow"])
 
 
 class StartRunRequest(BaseModel):
-    mode: Literal["mock", "live"] = "mock"
-    topic: Optional[str] = Field(None, description="Chủ đề cho Creative (mode live)")
+    topic: Optional[str] = Field(None, description="Chủ đề cho Creative")
     library: str = Field("vng_insider", description="Thư viện clip cho Producer")
     subtitles: bool = True
     n_ideas: int = Field(5, ge=1, le=10)
@@ -41,7 +40,7 @@ def workflow_agents() -> dict:
 @router.post("/runs")
 def start_run(req: StartRunRequest) -> dict:
     topic = (req.topic or "").strip() or None
-    return runner.start_run(mode=req.mode, topic=topic, library=req.library,
+    return runner.start_run(topic=topic, library=req.library,
                             subtitles=req.subtitles, n_ideas=req.n_ideas)
 
 

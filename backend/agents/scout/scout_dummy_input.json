@@ -1,0 +1,21 @@
+{
+  "nganh": "career & office-life VN",
+  "thu_thap_ngay": "2026-06-10",
+  "videos": [
+    {"id": "v01", "hook": "Đừng bao giờ nói câu này khi phỏng vấn", "format": "talking-head + text overlay", "do_dai_giay": 38, "views": 1200000, "retention_3s_pct": 72, "shares": 18500, "chu_de": "tips phỏng vấn"},
+    {"id": "v02", "hook": "Một ngày đi làm ở công ty công nghệ", "format": "POV b-roll", "do_dai_giay": 52, "views": 890000, "retention_3s_pct": 65, "shares": 9200, "chu_de": "office life"},
+    {"id": "v03", "hook": "3 điều mình ước biết trước khi đi làm", "format": "listicle text + b-roll", "do_dai_giay": 45, "views": 1500000, "retention_3s_pct": 78, "shares": 24000, "chu_de": "career tips"},
+    {"id": "v04", "hook": "Văn phòng có phòng gym thì sao", "format": "office tour", "do_dai_giay": 60, "views": 430000, "retention_3s_pct": 51, "shares": 3100, "chu_de": "office tour"},
+    {"id": "v05", "hook": "Sự thật về làm game không ai nói", "format": "talking-head", "do_dai_giay": 41, "views": 980000, "retention_3s_pct": 69, "shares": 11200, "chu_de": "làm game"},
+    {"id": "v06", "hook": "POV: ngày đầu đi làm", "format": "POV b-roll", "do_dai_giay": 35, "views": 2100000, "retention_3s_pct": 81, "shares": 31000, "chu_de": "office life"},
+    {"id": "v07", "hook": "CV thế nào thì bị loại trong 5 giây", "format": "talking-head + screen", "do_dai_giay": 48, "views": 760000, "retention_3s_pct": 63, "shares": 8400, "chu_de": "tips phỏng vấn"},
+    {"id": "v08", "hook": "Đi làm mà như đi chơi", "format": "office tour", "do_dai_giay": 55, "views": 340000, "retention_3s_pct": 48, "shares": 2200, "chu_de": "office life"},
+    {"id": "v09", "hook": "Lương fresher IT thật sự bao nhiêu", "format": "talking-head", "do_dai_giay": 50, "views": 1100000, "retention_3s_pct": 70, "shares": 14000, "chu_de": "career tips"},
+    {"id": "v10", "hook": "Mình đã pass phỏng vấn nhờ câu này", "format": "storytime", "do_dai_giay": 58, "views": 670000, "retention_3s_pct": 60, "shares": 7100, "chu_de": "tips phỏng vấn"},
+    {"id": "v11", "hook": "Tour văn phòng triệu đô", "format": "office tour", "do_dai_giay": 47, "views": 520000, "retention_3s_pct": 55, "shares": 4300, "chu_de": "office tour"},
+    {"id": "v12", "hook": "3 sai lầm khiến bạn trượt phỏng vấn", "format": "listicle text + b-roll", "do_dai_giay": 42, "views": 1350000, "retention_3s_pct": 76, "shares": 20500, "chu_de": "tips phỏng vấn"},
+    {"id": "v13", "hook": "Đằng sau app triệu người dùng", "format": "POV b-roll", "do_dai_giay": 53, "views": 610000, "retention_3s_pct": 58, "shares": 6000, "chu_de": "làm tech"},
+    {"id": "v14", "hook": "Đừng học IT nếu chưa biết điều này", "format": "talking-head + text overlay", "do_dai_giay": 40, "views": 1450000, "retention_3s_pct": 74, "shares": 19000, "chu_de": "career tips"},
+    {"id": "v15", "hook": "Một vòng công ty trong 60 giây", "format": "office tour fast-cut", "do_dai_giay": 44, "views": 780000, "retention_3s_pct": 64, "shares": 8800, "chu_de": "office tour"}
+  ]
+}

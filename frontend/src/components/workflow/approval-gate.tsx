@@ -62,11 +62,7 @@ export function ApprovalGate({ run }: { run: WorkflowRun }) {
                 className="max-h-72 rounded-lg border border-border"
               />
             ) : (
-              <p className="text-xs text-muted-foreground">
-                {run.mode === 'mock'
-                  ? 'Mock — không render file video thật.'
-                  : 'Không có link video preview.'}
-              </p>
+              <p className="text-xs text-muted-foreground">Không có link video preview.</p>
             )}
             <div className="flex gap-2 pt-1">
               <Button size="sm" onClick={() => decide(true)} disabled={decision.isPending}>

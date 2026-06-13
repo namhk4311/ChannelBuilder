@@ -10,14 +10,6 @@ import logging
 log = logging.getLogger(__name__)
 
 # Tool defs tĩnh cho agent chưa expose TOOL_DEFINITIONS.
-SCOUT_TOOLS = [{
-    "name": "scan_trends",
-    "description": (
-        "Quét trend TikTok + seed benchmark tuyệt đối (retention_3s) cho vòng đánh giá. "
-        "Chưa wire vào ChannelBuilder — orchestrator đang dùng trend digest mock."
-    ),
-}]
-
 PRODUCER_TOOLS = [{
     "name": "produce_video",
     "description": (
@@ -41,6 +33,15 @@ def _agent(key: str, code: str, name: str, role: str, build_status: str,
 
 def get_agents() -> list[dict]:
     """Build catalog mỗi lần gọi — tool defs luôn khớp code agent hiện tại."""
+    scout_tools: list[dict] = []
+    scout_err: str | None = None
+    try:
+        from agents.scout import TOOL_DEFINITIONS as scout_defs
+        scout_tools = _tool_summaries(scout_defs)
+    except Exception as e:  # noqa: BLE001 — catalog không được sập vì 1 agent
+        scout_err = f"import agents.scout lỗi: {e}"
+        log.warning(scout_err)
+
     creative_tools: list[dict] = []
     creative_err: str | None = None
     try:
@@ -62,7 +63,7 @@ def get_agents() -> list[dict]:
     return [
         _agent("scout", "A", "Scout",
                "Quét trend thị trường + seed benchmark cho vòng đánh giá",
-               "planned", SCOUT_TOOLS),
+               "built", scout_tools, scout_err),
         _agent("creative", "B", "Creative",
                "Sinh ý tưởng + kịch bản 40-55s + text hook + shot list",
                "built", creative_tools, creative_err),

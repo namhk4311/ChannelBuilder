@@ -17,7 +17,6 @@ import {
 } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Switch } from '@/components/ui/switch'
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import type { RunStatus, StepStatus } from '@/api/workflow'
 import { useLibraryStore } from '@/stores/library-store'
 import { useAgents, useRun, useRuns, useStartRun } from '@/hooks/use-workflow'
@@ -38,7 +37,6 @@ const RUN_STATUS_AS_STEP: Record<RunStatus, StepStatus> = {
 
 export default function WorkflowPage() {
   const library = useLibraryStore((s) => s.library)
-  const [mode, setMode] = useState<'mock' | 'live'>('mock')
   const [topic, setTopic] = useState('')
   const [subtitles, setSubtitles] = useState(true)
   const [runId, setRunId] = useState<string | null>(null)
@@ -48,7 +46,7 @@ export default function WorkflowPage() {
   const run = useRun(runId)
   const start = useStartRun((r) => {
     setRunId(r.id)
-    toast.success(`Đã khởi động ${r.id} (${r.mode})`)
+    toast.success(`Đã khởi động ${r.id}`)
   })
 
   // Mở UI là thấy ngay run mới nhất (kể cả run được start từ nơi khác).
@@ -61,7 +59,7 @@ export default function WorkflowPage() {
 
   const handleStart = () =>
     start.mutate(
-      { mode, topic: topic.trim() || null, library: library ?? 'vng_insider', subtitles },
+      { topic: topic.trim() || null, library: library ?? 'vng_insider', subtitles },
       { onError: (e) => toast.error(`Không khởi động được run: ${e.message}`) },
     )
 
@@ -77,14 +75,8 @@ export default function WorkflowPage() {
       <Card>
         <CardContent>
           <div className="flex flex-col md:flex-row md:items-center gap-3">
-            <Tabs value={mode} onValueChange={(v) => setMode(v as 'mock' | 'live')}>
-              <TabsList>
-                <TabsTrigger value="mock">Mock</TabsTrigger>
-                <TabsTrigger value="live">Live</TabsTrigger>
-              </TabsList>
-            </Tabs>
             <Input
-              placeholder="Chủ đề (optional, dùng cho Creative ở mode live)…"
+              placeholder="Chủ đề (optional, dùng cho Creative)…"
               value={topic}
               onChange={(e) => setTopic(e.target.value)}
               className="md:max-w-md"
@@ -109,12 +101,11 @@ export default function WorkflowPage() {
               chọn.
             </p>
           )}
-          {mode === 'live' && (
-            <p className="mt-2 text-xs text-amber-600 dark:text-amber-400">
-              Live: Creative gọi LLM thật (AgentBase MaaS), Producer render thật (ElevenLabs +
-              ffmpeg) và Publisher đăng TikTok thật (video private SELF_ONLY, tối đa 5 post/24h).
-            </p>
-          )}
+          <p className="mt-2 text-xs text-amber-600 dark:text-amber-400">
+            Pipeline chạy thật: Scout quét trend (dataset seed), Creative gọi LLM (VNGCloud MaaS),
+            Producer render thật (ElevenLabs + ffmpeg) và Publisher đăng TikTok thật (video private
+            SELF_ONLY, tối đa 5 post/24h).
+          </p>
         </CardContent>
       </Card>
 
@@ -151,7 +142,7 @@ export default function WorkflowPage() {
                 <SelectContent>
                   {runs.data!.map((r) => (
                     <SelectItem key={r.id} value={r.id}>
-                      {r.id} · {r.mode}
+                      {r.id}
                       {r.topic ? ` · ${r.topic}` : ''}
                     </SelectItem>
                   ))}

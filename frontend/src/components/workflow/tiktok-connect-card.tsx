@@ -58,12 +58,12 @@ export function TikTokConnectCard() {
 
   if (status.data.connected) {
     return (
-      <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-        <CheckCircle2 className="size-3.5 text-emerald-600 dark:text-emerald-400" />
+      <p className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-muted-foreground">
+        <CheckCircle2 className="size-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" />
         TikTok đã kết nối · open_id{' '}
-        <code className="text-foreground">{status.data.open_id}</code> · scope{' '}
-        <code className="text-foreground">{status.data.scope}</code> — token tự refresh, không
-        cần OAuth lại.
+        <code className="text-foreground break-all">{status.data.open_id}</code> · scope{' '}
+        <code className="text-foreground break-all">{status.data.scope}</code> — token tự refresh,
+        không cần OAuth lại.
       </p>
     )
   }

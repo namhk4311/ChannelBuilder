@@ -30,9 +30,9 @@ export type StepStatus =
   | 'rejected'
   | 'skipped'
 
-/** Nguồn data của step: real = chạy thật; sample = output mẫu có sẵn;
- *  mock = giả lập produce/publish/metric; stub = agent chưa build/wire. */
-export type StepDataSource = 'real' | 'sample' | 'mock' | 'stub'
+/** Nguồn data của step: real = chạy thật (LLM/render/đăng/metric);
+ *  sample = phân tích trên dataset seed (Scout); stub = agent chưa build/wire. */
+export type StepDataSource = 'real' | 'sample' | 'stub'
 
 export interface RunStep {
   id: string
@@ -53,7 +53,6 @@ export interface RunStep {
 
 export interface WorkflowRun {
   id: string
-  mode: 'mock' | 'live'
   topic: string | null
   library: string
   subtitles: boolean
@@ -66,7 +65,6 @@ export interface WorkflowRun {
 
 export interface RunSummary {
   id: string
-  mode: 'mock' | 'live'
   topic: string | null
   status: RunStatus
   created_at: string
@@ -75,7 +73,6 @@ export interface RunSummary {
 }
 
 export interface StartRunBody {
-  mode: 'mock' | 'live'
   topic?: string | null
   library: string
   subtitles?: boolean

@@ -38,7 +38,7 @@ export function RunStepList({ steps }: { steps: RunStep[] }) {
         const showProgress = step.status === 'running' && step.progress != null
         return (
           <AccordionItem key={step.id} value={step.id} disabled={!expandable}>
-            <AccordionTrigger className="py-3">
+            <AccordionTrigger className="py-3 min-w-0">
               <div className="flex flex-1 items-center gap-3 min-w-0 pr-2">
                 <span className="inline-flex items-center justify-center size-7 rounded-md bg-primary/10 text-primary text-xs font-semibold shrink-0">
                   {step.code}

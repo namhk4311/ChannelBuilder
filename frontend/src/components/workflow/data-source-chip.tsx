@@ -4,8 +4,7 @@ import type { StepDataSource } from '@/api/workflow'
 /** Chip nói rõ step chạy data thật hay giả — điểm minh bạch của demo. */
 const SOURCE_MAP: Record<StepDataSource, { label: string; className: string }> = {
   real: { label: 'data thật', className: 'border-emerald-500/40 text-emerald-600 dark:text-emerald-400' },
-  sample: { label: 'sample', className: 'border-sky-500/40 text-sky-600 dark:text-sky-400' },
-  mock: { label: 'mock', className: 'border-amber-500/40 text-amber-600 dark:text-amber-400' },
+  sample: { label: 'dataset seed', className: 'border-sky-500/40 text-sky-600 dark:text-sky-400' },
   stub: { label: 'stub', className: 'border-border text-muted-foreground' },
 }
 
