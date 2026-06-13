@@ -1,39 +1,69 @@
-import { Copy } from 'lucide-react'
-import { toast } from 'sonner'
+import { useEffect, useState } from 'react'
+import { Timer } from 'lucide-react'
 import {
   Accordion,
   AccordionContent,
   AccordionItem,
   AccordionTrigger,
 } from '@/components/ui/accordion'
-import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
+import { cn } from '@/lib/utils'
 import type { RunStep } from '@/api/workflow'
-import { DataSourceChip } from '@/components/workflow/data-source-chip'
+import { StepOutput } from '@/components/workflow/step-output'
 import { StepStatusChip } from '@/components/workflow/step-status-chip'
 
-function stepDuration(step: RunStep): string | null {
-  if (!step.started_at || !step.ended_at) return null
-  const ms = new Date(step.ended_at).getTime() - new Date(step.started_at).getTime()
-  return ms < 1000 ? `${ms}ms` : `${(ms / 1000).toFixed(1)}s`
-}
-
-function copyJson(label: string, value: unknown) {
-  navigator.clipboard
-    .writeText(JSON.stringify(value, null, 2))
-    .then(() => toast.success(`Đã copy output ${label}`))
-    .catch(() => toast.error('Không copy được — clipboard bị chặn'))
+function fmtElapsed(ms: number): string {
+  if (ms < 1000) return `${ms}ms`
+  const sec = ms / 1000
+  if (sec < 60) return `${sec.toFixed(1)}s`
+  const m = Math.floor(sec / 60)
+  const s = Math.floor(sec % 60)
+  return `${m}m ${s.toString().padStart(2, '0')}s`
 }
 
 /**
- * Timeline step của 1 run — mỗi step expand được để xem JSON output.
- * Step Producer đang chạy hiển thị progress bar % thật từ job 6 bước.
+ * Stopwatch theo step: đang chạy thì đếm live từ started_at → now (tick 100ms);
+ * step xong thì chốt ở khoảng started_at → ended_at.
+ */
+function StepTimer({ step }: { step: RunStep }) {
+  const live = !!step.started_at && !step.ended_at
+  const [now, setNow] = useState(() => Date.now())
+
+  useEffect(() => {
+    if (!live) return
+    const id = setInterval(() => setNow(Date.now()), 100)
+    return () => clearInterval(id)
+  }, [live])
+
+  if (!step.started_at) return null
+  const end = step.ended_at ? new Date(step.ended_at).getTime() : now
+  const ms = Math.max(0, end - new Date(step.started_at).getTime())
+
+  return (
+    <span
+      className={cn(
+        'inline-flex items-center gap-1 text-xs tabular-nums',
+        live ? 'text-primary' : 'text-muted-foreground',
+      )}
+    >
+      {live ? (
+        <span className="size-1.5 animate-pulse rounded-full bg-primary" />
+      ) : (
+        <Timer className="size-3" />
+      )}
+      {fmtElapsed(ms)}
+    </span>
+  )
+}
+
+/**
+ * Timeline step của 1 run — mỗi step expand được để xem output (bảng / JSON).
+ * Step đang chạy hiển thị stopwatch live; Producer kèm progress bar % từ job 6 bước.
  */
 export function RunStepList({ steps }: { steps: RunStep[] }) {
   return (
     <Accordion type="multiple" className="w-full">
       {steps.map((step) => {
-        const duration = stepDuration(step)
         const expandable = step.output != null || step.error != null
         const showProgress = step.status === 'running' && step.progress != null
         return (
@@ -61,40 +91,16 @@ export function RunStepList({ steps }: { steps: RunStep[] }) {
                   )}
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
-                  {duration && (
-                    <span className="text-xs text-muted-foreground tabular-nums hidden sm:inline">
-                      {duration}
-                    </span>
-                  )}
-                  <DataSourceChip source={step.data_source} />
+                  <StepTimer step={step} />
                   <StepStatusChip status={step.status} />
                 </div>
               </div>
             </AccordionTrigger>
             {expandable && (
               <AccordionContent>
-                <div className="space-y-2 pl-10">
+                <div className="space-y-2">
                   {step.error && <p className="text-sm text-destructive">Lỗi: {step.error}</p>}
-                  {step.output != null && (
-                    <div className="relative rounded-lg border border-border bg-muted/50">
-                      <div className="flex items-center justify-between border-b border-border px-3 py-1.5">
-                        <code className="text-xs text-muted-foreground">
-                          {step.tool} → output
-                        </code>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-7 px-2"
-                          onClick={() => copyJson(step.tool, step.output)}
-                        >
-                          <Copy /> Copy
-                        </Button>
-                      </div>
-                      <pre className="max-h-80 overflow-auto p-3 text-xs leading-relaxed">
-                        {JSON.stringify(step.output, null, 2)}
-                      </pre>
-                    </div>
-                  )}
+                  {step.output != null && <StepOutput tool={step.tool} output={step.output} />}
                 </div>
               </AccordionContent>
             )}

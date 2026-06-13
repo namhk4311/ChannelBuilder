@@ -101,11 +101,6 @@ export default function WorkflowPage() {
               chọn.
             </p>
           )}
-          <p className="mt-2 text-xs text-amber-600 dark:text-amber-400">
-            Pipeline chạy thật: Scout quét trend (dataset seed), Creative gọi LLM (VNGCloud MaaS),
-            Producer render thật (ElevenLabs + ffmpeg) và Publisher đăng TikTok thật (video private
-            SELF_ONLY, tối đa 5 post/24h).
-          </p>
         </CardContent>
       </Card>
 
@@ -179,9 +174,7 @@ export default function WorkflowPage() {
       {/* Agent catalog */}
       {agents.data && (
         <section className="space-y-3">
-          <h3 className="text-base font-semibold text-foreground">
-            Agent &amp; tools (đọc live từ TOOL_DEFINITIONS)
-          </h3>
+          <h3 className="text-base font-semibold text-foreground">Agent &amp; tools</h3>
           <AgentCatalog agents={agents.data} />
         </section>
       )}

@@ -108,10 +108,6 @@ export function PipelineFlow({ agents, steps = [] }: PipelineFlowProps) {
             )
           })}
         </div>
-        <p className="mt-3 text-xs text-muted-foreground">
-          ★ Orchestrator (backend ChannelBuilder) import trực tiếp tool của từng agent và điều
-          phối tuần tự — human quyết định ở gate trước khi đăng.
-        </p>
       </CardContent>
     </Card>
   )
