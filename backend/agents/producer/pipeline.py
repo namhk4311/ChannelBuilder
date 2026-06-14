@@ -107,10 +107,10 @@ class ProduceRequest(BaseModel):
                          description="ID track nhạc nền từ /api/music. None → không có nhạc")
     beat_sync: bool = Field(True,
                          description="Snap cut transitions vào beat của music_track. Chỉ có hiệu lực khi music_track_id set")
-    music_volume: float = Field(0.3, ge=0.05, le=1.0,
-                         description="Base gain nhạc nền TRƯỚC sidechain duck. "
-                                     "0.3 = ~-10dB (mặc định, nhạc nền vừa nghe). "
-                                     "0.1 = -20dB (rất nhỏ). 0.7 = -3dB (gần ngang voice). "
+    music_volume: float = Field(0.3, ge=0.3, le=0.5,
+                         description="Base gain nhạc nền TRƯỚC sidechain duck. Clamped 0.3-0.5 "
+                                     "(~-10dB tới -6dB) để voice luôn nghe rõ trên nhạc. "
+                                     "0.3 = mặc định nền nhẹ. 0.5 = nhạc nhỉnh hơn nhưng vẫn dưới voice. "
                                      "Sidechain vẫn duck thêm khi voice nói.")
 
 

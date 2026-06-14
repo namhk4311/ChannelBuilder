@@ -85,8 +85,8 @@ export function MusicPicker({ value, onChange, disabled, idPrefix = 'mp' }: Musi
           <input
             id={`${idPrefix}-vol`}
             type="range"
-            min={5}
-            max={100}
+            min={30}
+            max={50}
             step={5}
             value={volPct}
             disabled={disabled || !hasTrack}
@@ -95,6 +95,7 @@ export function MusicPicker({ value, onChange, disabled, idPrefix = 'mp' }: Musi
             }
             className="accent-primary w-32 disabled:opacity-40"
             aria-label="Music volume"
+            title="Clamped 30-50% để voice luôn nghe rõ trên nhạc"
           />
           <span className="tabular-nums text-sm text-primary font-medium min-w-12">
             {volPct}%

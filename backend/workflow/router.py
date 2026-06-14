@@ -31,8 +31,8 @@ class StartRunRequest(BaseModel):
                          description="ID track nhạc nền từ /api/music. None → không nhạc")
     beat_sync: bool = Field(True,
                          description="Snap cut vào beat. Chỉ effective khi có music_track_id")
-    music_volume: float = Field(0.3, ge=0.05, le=1.0,
-                         description="Base gain music (0.3 ≈ -10dB)")
+    music_volume: float = Field(0.3, ge=0.3, le=0.5,
+                         description="Base gain music — clamped 0.3-0.5 (~-10 tới -6dB)")
 
 
 class ApprovalRequest(BaseModel):
