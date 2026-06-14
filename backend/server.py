@@ -38,7 +38,12 @@ from agents.producer import (
     producer_router,
     run_migrations,
 )
-from agents.publisher import publisher_oauth_router
+from agents.publisher import (
+    publisher_oauth_router,
+    publisher_schedule_router,
+    shutdown_scheduler,
+    start_scheduler,
+)
 from workflow import workflow_router
 from chat import chat_router
 
@@ -52,9 +57,11 @@ async def lifespan(_: FastAPI):
     log.info("──────── startup ────────")
     init_buckets()
     run_migrations()
+    start_scheduler()  # poller đăng bài theo lịch (đọc bảng scheduled_posts)
     log.info("ready · listening on http://localhost:8000")
     yield
     log.info("──────── shutdown ────────")
+    shutdown_scheduler()
 
 
 app = FastAPI(title="VNG Insider · Clip Warehouse", lifespan=lifespan)
@@ -105,6 +112,7 @@ app.include_router(editor_router)
 app.include_router(music_router)
 app.include_router(producer_router)
 app.include_router(publisher_oauth_router)
+app.include_router(publisher_schedule_router)
 app.include_router(workflow_router)
 app.include_router(chat_router)
 

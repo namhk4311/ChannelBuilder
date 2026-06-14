@@ -68,6 +68,18 @@ TIKTOK_CLIENT_SECRET = os.getenv("TIKTOK_CLIENT_SECRET")
 TIKTOK_REDIRECT_URI  = os.getenv("TIKTOK_REDIRECT_URI")
 TIKTOK_SCOPES        = os.getenv("TIKTOK_SCOPES") or "user.info.basic,video.publish"
 
+# ─── Publisher scheduler — đăng theo lịch + guardrail bài/ngày ───────────────
+# MAX_POSTS_PER_DAY = guardrail tự đặt chống spam (KHÔNG phải trần TikTok — "5"
+# trong doc team là đọc nhầm cap 5 *user*/24h). Chỉnh tự do qua env.
+MAX_POSTS_PER_DAY     = int(os.getenv("MAX_POSTS_PER_DAY", "5"))
+SCHEDULE_TZ           = os.getenv("SCHEDULE_TZ", "Asia/Saigon")
+# Chu kỳ poller quét queue (mỗi phút) để đăng bài đúng giờ riêng của nó.
+SCHEDULE_TICK_SECONDS = int(os.getenv("SCHEDULE_TICK_SECONDS", "60"))
+# Giờ pre-fill sẵn cho datetime picker (user xoá đè được).
+SCHEDULE_DEFAULT_HOUR = int(os.getenv("SCHEDULE_DEFAULT_HOUR", "9"))
+# false để tắt poller (vd chỉ 1 instance bật khi scale nhiều replica).
+SCHEDULE_TICK_ENABLED = (os.getenv("SCHEDULE_TICK_ENABLED", "true").lower() == "true")
+
 # ─── Logging ─────────────────────────────────────────────────────────────────
 LOG_LEVEL = os.getenv("LOG_LEVEL") or "INFO"
 LOG_FILE  = os.getenv("LOG_FILE")   # None nếu không set

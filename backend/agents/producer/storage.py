@@ -3,6 +3,9 @@ from __future__ import annotations
 
 import json
 import logging
+import tempfile
+import urllib.request
+from pathlib import Path
 
 from minio import Minio
 
@@ -53,3 +56,13 @@ def init_buckets() -> None:
         minio_client.set_bucket_policy(b, json.dumps(public_policy))
     log.info("init_buckets: ready (sources=%s, outputs=%s, music=%s public-read)",
              BUCKET_SOURCES, BUCKET_OUTPUTS, BUCKET_MUSIC)
+
+
+def download_to_tmp(url: str) -> str:
+    """Tải object MinIO (URL public-read) về file tạm — dùng cho publish_video
+    (TikTok client cần local path). Caller chịu trách nhiệm unlink sau khi xong.
+    """
+    fd, path = tempfile.mkstemp(suffix=".mp4", prefix="publish_")
+    Path(path).unlink(missing_ok=True)
+    urllib.request.urlretrieve(url, path)  # noqa: S310 — URL nội bộ MinIO outputs
+    return path

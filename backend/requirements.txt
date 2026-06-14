@@ -13,3 +13,4 @@ alembic>=1.13
 sqlalchemy>=2.0
 librosa>=0.10
 soundfile>=0.12
+APScheduler>=3.10,<4
