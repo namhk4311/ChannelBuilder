@@ -1,10 +1,12 @@
 import { useState } from 'react'
-import { Check, ShieldAlert, X } from 'lucide-react'
+import { CalendarClock, Check, ShieldAlert, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { ConfirmDialog } from '@/components/common/confirm-dialog'
-import type { WorkflowRun } from '@/api/workflow'
+import type { GateDecisionBody, PublishMode, WorkflowRun } from '@/api/workflow'
 import { useGateDecision } from '@/hooks/use-workflow'
 
 interface GateOutput {
@@ -14,25 +16,35 @@ interface GateOutput {
   duration_sec?: number
 }
 
+/** datetime-local value (giờ máy) cho 9h sáng ngày KẾ — demo chạy ở Asia/Saigon. */
+function defaultSlotLocal(): string {
+  const d = new Date()
+  d.setDate(d.getDate() + 1)
+  d.setHours(9, 0, 0, 0)
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
+
 /**
- * Human gate — nguyên tắc "AI execute, Human decide": pipeline dừng tại đây
- * cho tới khi human duyệt đăng. Có preview video thật từ MinIO khi chạy live.
+ * Human gate — "AI execute, Human decide": pipeline dừng tại đây để duyệt.
+ * Hành động khớp `publishMode` đã chọn từ đầu (mục Publisher):
+ *   review_publish → Duyệt & đăng ngay · schedule → chọn giờ + Duyệt & lên lịch.
+ * Luôn có "Từ chối". Preview video thật từ MinIO khi chạy live.
  */
-export function ApprovalGate({ run }: { run: WorkflowRun }) {
+export function ApprovalGate({ run, publishMode }: { run: WorkflowRun; publishMode: PublishMode }) {
   const [confirmReject, setConfirmReject] = useState(false)
+  const [slot, setSlot] = useState(defaultSlotLocal)
   const decision = useGateDecision(run.id)
 
   if (run.status !== 'awaiting_approval') return null
   const gateStep = run.steps.find((s) => s.id === 'human_approval')
   const preview = (gateStep?.output ?? {}) as GateOutput
   const videoUrl = preview.video_url && /^https?:/.test(preview.video_url) ? preview.video_url : null
+  const isSchedule = publishMode === 'schedule'
 
-  const decide = (approve: boolean) =>
-    decision.mutate(approve, {
-      onSuccess: () =>
-        approve
-          ? toast.success('Đã duyệt — Publisher đang đăng video')
-          : toast.info('Đã từ chối đăng video'),
+  const submit = (body: GateDecisionBody, okMsg: string) =>
+    decision.mutate(body, {
+      onSuccess: () => toast.success(okMsg),
       onError: (e) => toast.error(`Không gửi được quyết định: ${e.message}`),
     })
 
@@ -40,7 +52,7 @@ export function ApprovalGate({ run }: { run: WorkflowRun }) {
     <>
       <Alert variant="warning">
         <ShieldAlert />
-        <AlertTitle>Chờ human duyệt đăng TikTok</AlertTitle>
+        <AlertTitle>Kiểm duyệt trước khi {isSchedule ? 'lên lịch' : 'đăng'}</AlertTitle>
         <AlertDescription>
           <div className="space-y-2">
             {preview.text_hook && (
@@ -64,10 +76,47 @@ export function ApprovalGate({ run }: { run: WorkflowRun }) {
             ) : (
               <p className="text-xs text-muted-foreground">Không có link video preview.</p>
             )}
-            <div className="flex gap-2 pt-1">
-              <Button size="sm" onClick={() => decide(true)} disabled={decision.isPending}>
-                <Check /> Duyệt & đăng
-              </Button>
+
+            {isSchedule && (
+              <div className="flex flex-wrap items-end gap-2 rounded-lg border border-border bg-background/50 p-3">
+                <div className="space-y-1">
+                  <Label htmlFor="gate-slot" className="text-xs text-muted-foreground">
+                    Giờ đăng (giờ Việt Nam)
+                  </Label>
+                  <Input
+                    id="gate-slot"
+                    type="datetime-local"
+                    value={slot}
+                    onChange={(e) => setSlot(e.target.value)}
+                    className="w-56"
+                  />
+                </div>
+              </div>
+            )}
+
+            <div className="flex flex-wrap gap-2 pt-1">
+              {isSchedule ? (
+                <Button
+                  size="sm"
+                  onClick={() =>
+                    submit(
+                      { decision: 'schedule', scheduled_for: new Date(slot).toISOString() },
+                      'Đã lên lịch đăng video',
+                    )
+                  }
+                  disabled={decision.isPending || !slot}
+                >
+                  <CalendarClock /> Duyệt &amp; lên lịch
+                </Button>
+              ) : (
+                <Button
+                  size="sm"
+                  onClick={() => submit({ decision: 'now' }, 'Đã duyệt — Publisher đang đăng video')}
+                  disabled={decision.isPending}
+                >
+                  <Check /> Duyệt &amp; đăng ngay
+                </Button>
+              )}
               <Button
                 size="sm"
                 variant="outline"
@@ -88,7 +137,7 @@ export function ApprovalGate({ run }: { run: WorkflowRun }) {
         title="Từ chối đăng video này?"
         description="Run sẽ dừng tại gate — video không được đăng, các bước sau bị bỏ qua."
         confirmLabel="Từ chối đăng"
-        onConfirm={() => decide(false)}
+        onConfirm={() => submit({ decision: 'reject' }, 'Đã từ chối đăng video')}
         isPending={decision.isPending}
       />
     </>

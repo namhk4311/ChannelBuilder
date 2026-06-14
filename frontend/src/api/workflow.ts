@@ -35,6 +35,7 @@ export type StepStatus =
   | 'awaiting'
   | 'rejected'
   | 'skipped'
+  | 'scheduled'
 
 /** Nguồn data của step: real = chạy thật (LLM/render/đăng/metric);
  *  sample = phân tích trên dataset seed (Scout); stub = agent chưa build/wire. */
@@ -65,9 +66,26 @@ export interface WorkflowRun {
   status: RunStatus
   created_at: string
   updated_at: string
-  gate: { decision: 'approved' | 'rejected' | null; decided_at: string | null }
+  gate: {
+    decision: 'now' | 'schedule' | 'reject' | 'approved' | 'rejected' | null
+    scheduled_for: string | null
+    decided_at: string | null
+  }
   steps: RunStep[]
 }
+
+/** Quyết định tại human gate: đăng ngay / lên lịch / từ chối. */
+export interface GateDecisionBody {
+  decision: 'now' | 'schedule' | 'reject'
+  /** ISO UTC — chỉ dùng khi decision='schedule'. */
+  scheduled_for?: string | null
+}
+
+/**
+ * Chế độ đăng chọn từ đầu (mục Publisher) — quyết định bước gate hiện gì:
+ *  review_publish = kiểm duyệt rồi đăng ngay · schedule = lên lịch đăng.
+ */
+export type PublishMode = 'review_publish' | 'schedule'
 
 export interface RunSummary {
   id: string
@@ -97,8 +115,8 @@ export const fetchRun = (runId: string) => get<WorkflowRun>(`/workflow/runs/${ru
 
 export const startRun = (body: StartRunBody) => post<WorkflowRun>('/workflow/runs', body)
 
-export const decideGate = (runId: string, approve: boolean) =>
-  post<WorkflowRun>(`/workflow/runs/${runId}/approval`, { approve })
+export const decideGate = (runId: string, body: GateDecisionBody) =>
+  post<WorkflowRun>(`/workflow/runs/${runId}/approval`, body)
 
 export const decideScript = (runId: string, approve: boolean, script?: string) =>
   post<WorkflowRun>(`/workflow/runs/${runId}/script`, { approve, script })

@@ -19,6 +19,10 @@ const STATUS_MAP: Record<StepStatus, { label: string; className: string; pulse?:
   },
   rejected: { label: 'Từ chối', className: 'bg-red-500/10 text-red-600 dark:text-red-400' },
   skipped: { label: 'Bỏ qua', className: 'bg-muted text-muted-foreground' },
+  scheduled: {
+    label: 'Đã lên lịch',
+    className: 'bg-violet-500/10 text-violet-600 dark:text-violet-400',
+  },
 }
 
 export function StepStatusChip({ status, className }: { status: StepStatus; className?: string }) {

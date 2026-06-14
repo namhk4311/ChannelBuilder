@@ -6,6 +6,7 @@ import {
   fetchRun,
   fetchRuns,
   startRun,
+  type GateDecisionBody,
   type WorkflowRun,
 } from '@/api/workflow'
 
@@ -55,11 +56,13 @@ export function useStartRun(onStarted: (run: WorkflowRun) => void) {
 export function useGateDecision(runId: string | null) {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (approve: boolean) => decideGate(runId!, approve),
+    mutationFn: (body: GateDecisionBody) => decideGate(runId!, body),
     onSuccess: (run) => {
       qc.setQueryData(['workflow', 'run', run.id], run)
       qc.invalidateQueries({ queryKey: ['workflow', 'run', run.id] })
       qc.invalidateQueries({ queryKey: ['workflow', 'runs'] })
+      // Lên lịch hoặc đăng ngay đều có thể tạo row mới trong calendar.
+      qc.invalidateQueries({ queryKey: ['publisher', 'schedule'] })
     },
   })
 }
@@ -74,6 +77,8 @@ export function useScriptDecision(runId: string | null) {
       qc.setQueryData(['workflow', 'run', run.id], run)
       qc.invalidateQueries({ queryKey: ['workflow', 'run', run.id] })
       qc.invalidateQueries({ queryKey: ['workflow', 'runs'] })
+      // Lên lịch hoặc đăng ngay đều có thể tạo row mới trong calendar.
+      qc.invalidateQueries({ queryKey: ['publisher', 'schedule'] })
     },
   })
 }

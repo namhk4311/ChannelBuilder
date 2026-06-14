@@ -1,13 +1,10 @@
 import { useEffect, useState } from 'react'
-import { Clapperboard, Play } from 'lucide-react'
+import { Clapperboard } from 'lucide-react'
 import { toast } from 'sonner'
 import { PageHeader } from '@/components/common/page-header'
 import { EmptyState } from '@/components/common/empty-state'
 import { LoadError } from '@/components/common/load-error'
-import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import {
   Select,
   SelectContent,
@@ -16,17 +13,17 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Switch } from '@/components/ui/switch'
-import type { RunStatus, StepStatus } from '@/api/workflow'
+import type { PublishMode, RunStatus, StepStatus } from '@/api/workflow'
 import { useLibraryStore } from '@/stores/library-store'
 import { useAgents, useRun, useRuns, useStartRun } from '@/hooks/use-workflow'
 import { AgentCatalog } from '@/components/workflow/agent-catalog'
 import { ApprovalGate } from '@/components/workflow/approval-gate'
 import { PipelineFlow } from '@/components/workflow/pipeline-flow'
+import { RunControls } from '@/components/workflow/run-controls'
 import { RunStepList } from '@/components/workflow/run-step-list'
 import { StepStatusChip } from '@/components/workflow/step-status-chip'
 import { TikTokConnectCard } from '@/components/workflow/tiktok-connect-card'
-import { MUSIC_PICKER_DEFAULT, MusicPicker, type MusicPickerValue } from '@/components/music-picker'
+import { MUSIC_PICKER_DEFAULT, type MusicPickerValue } from '@/components/music-picker'
 
 const RUN_STATUS_AS_STEP: Record<RunStatus, StepStatus> = {
   running: 'running',
@@ -42,6 +39,7 @@ export default function WorkflowPage() {
   const [topic, setTopic] = useState('')
   const [subtitles, setSubtitles] = useState(true)
   const [music, setMusic] = useState<MusicPickerValue>(MUSIC_PICKER_DEFAULT)
+  const [publishMode, setPublishMode] = useState<PublishMode>('review_publish')
   const [runId, setRunId] = useState<string | null>(null)
 
   const agents = useAgents()
@@ -81,41 +79,21 @@ export default function WorkflowPage() {
         description="AI tự vận hành kênh TikTok: quét trend → kịch bản → dựng video → đăng → học. Human quyết định ở gate."
       />
 
-      {/* Run controls */}
-      <Card>
-        <CardContent className="space-y-4">
-          <div className="flex flex-col md:flex-row md:items-center gap-3">
-            <Input
-              placeholder="Chủ đề (optional, dùng cho Creative)…"
-              value={topic}
-              onChange={(e) => setTopic(e.target.value)}
-              className="md:max-w-md"
-            />
-            <div className="flex items-center gap-2">
-              <Switch id="wf-subtitles" checked={subtitles} onCheckedChange={setSubtitles} />
-              <Label htmlFor="wf-subtitles" className="text-sm text-muted-foreground">
-                Phụ đề
-              </Label>
-            </div>
-            <Button
-              onClick={handleStart}
-              disabled={start.isPending || runActive || !library}
-              className="md:ml-auto"
-            >
-              <Play /> Chạy pipeline
-            </Button>
-          </div>
-
-          <MusicPicker value={music} onChange={setMusic} disabled={runActive} idPrefix="wf" />
-
-          {!library && (
-            <p className="text-xs text-muted-foreground">
-              Chọn thư viện clip ở góc trên để chạy — Producer chỉ pick clip trong thư viện đang
-              chọn.
-            </p>
-          )}
-        </CardContent>
-      </Card>
+      {/* Run controls — gom theo agent (Creative / Producer / Publisher) */}
+      <RunControls
+        topic={topic}
+        setTopic={setTopic}
+        subtitles={subtitles}
+        setSubtitles={setSubtitles}
+        music={music}
+        setMusic={setMusic}
+        publishMode={publishMode}
+        setPublishMode={setPublishMode}
+        onStart={handleStart}
+        isPending={start.isPending}
+        runActive={runActive}
+        hasLibrary={!!library}
+      />
 
       {/* Kết nối TikTok cho Publisher [D] — OAuth 1 lần từ UI */}
       <TikTokConnectCard />
@@ -131,8 +109,8 @@ export default function WorkflowPage() {
       )}
       {agents.data && <PipelineFlow agents={agents.data} steps={run.data?.steps ?? []} />}
 
-      {/* Human gate */}
-      {run.data && <ApprovalGate run={run.data} />}
+      {/* Human gate — hành động khớp chế độ đăng đã chọn ở mục Publisher */}
+      {run.data && <ApprovalGate run={run.data} publishMode={publishMode} />}
 
       {/* Run detail */}
       <Card>

@@ -5,6 +5,7 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { queryClient } from '@/lib/query-client'
 import { ErrorBoundary } from '@/components/error-boundary'
 import { LibraryPicker } from '@/components/library-picker'
+import SchedulePage from '@/pages/schedule'
 import ChatPage from '@/pages/chat'
 import StudioPage from '@/pages/studio'
 import WarehousePage from '@/pages/warehouse'
@@ -16,6 +17,7 @@ const BASENAME = import.meta.env.BASE_URL.replace(/\/+$/, '') || '/'
 const SECTION_PATHS: Record<string, string> = {
   chat: '/',
   workflow: '/workflow',
+  schedule: '/schedule',
   studio: '/studio',
   warehouse: '/warehouse',
 }
@@ -26,9 +28,11 @@ function ShellNav() {
   const navigate = useNavigate()
   const section = location.pathname.startsWith('/warehouse')
     ? 'warehouse'
-    : location.pathname.startsWith('/studio')
-      ? 'studio'
-      : location.pathname.startsWith('/workflow')
+    : location.pathname.startsWith('/schedule')
+      ? 'schedule'
+      : location.pathname.startsWith('/studio')
+        ? 'studio'
+        : location.pathname.startsWith('/workflow')
         ? 'workflow'
         : 'chat'
 
@@ -39,6 +43,7 @@ function ShellNav() {
           <TabsTrigger value="chat">Chat</TabsTrigger>
           <TabsTrigger value="workflow">Workflow</TabsTrigger>
           {/* <TabsTrigger value="studio">Tạo video</TabsTrigger> */}
+          <TabsTrigger value="schedule">Lịch đăng</TabsTrigger>
           <TabsTrigger value="warehouse">Kho clip</TabsTrigger>
         </TabsList>
       </Tabs>
@@ -58,6 +63,7 @@ export default function App() {
               <Routes>
                 <Route index element={<ChatPage />} />
                 <Route path="workflow" element={<WorkflowPage />} />
+                <Route path="schedule" element={<SchedulePage />} />
                 <Route path="studio" element={<StudioPage />} />
                 <Route path="warehouse" element={<WarehousePage />} />
                 <Route path="*" element={<Navigate to="/" replace />} />
