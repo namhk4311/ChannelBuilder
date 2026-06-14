@@ -3,6 +3,8 @@ import { del, get, post } from '@/lib/api-client'
 export interface ChatMessage {
   role: 'user' | 'assistant'
   content: string
+  /** Mốc pipeline (video dựng xong) → render player ngay trong chat. */
+  video_url?: string | null
 }
 
 export interface ChatOption {
@@ -56,6 +58,9 @@ export const listChatSessions = () =>
   get<{ sessions: ChatSessionSummary[] }>('/chat/sessions')
 
 export const deleteChatSession = (id: string) => del<{ ok: boolean }>(`/chat/sessions/${id}`)
+
+/** Ghi mốc pipeline (video / đăng xong / huỷ / lỗi) vào hội thoại — idempotent. */
+export const recordRun = (id: string) => post<ChatSession>(`/chat/sessions/${id}/record-run`)
 
 export const sendChatMessage = (id: string, text: string) =>
   post<ChatSession>(`/chat/sessions/${id}/messages`, { text }, { timeout: 0 })

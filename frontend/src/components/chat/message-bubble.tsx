@@ -29,8 +29,16 @@ export function MessageBubble({ message }: { message: ChatMessage }) {
   return (
     <div className="flex gap-3">
       <DirectorAvatar />
-      <div className="min-w-0 flex-1 pt-0.5 text-foreground">
+      <div className="min-w-0 flex-1 space-y-2 pt-0.5 text-foreground">
         <Markdown content={message.content} />
+        {message.video_url && (
+          <video
+            src={message.video_url}
+            controls
+            preload="metadata"
+            className="max-h-80 w-full max-w-xs rounded-lg border border-border"
+          />
+        )}
       </div>
     </div>
   )

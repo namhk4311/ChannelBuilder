@@ -56,3 +56,12 @@ def send_message(conv_id: str, req: MessageRequest) -> dict:
     if state is None:
         raise HTTPException(404, "Session không tồn tại (server restart?)")
     return state
+
+
+@router.post("/sessions/{conv_id}/record-run")
+def record_run(conv_id: str) -> dict:
+    """Ghi mốc pipeline (video / đăng xong / huỷ / lỗi) vào hội thoại. FE gọi khi run đổi mốc."""
+    state = conductor.record_run_events(conv_id)
+    if state is None:
+        raise HTTPException(404, "Session không tồn tại")
+    return state

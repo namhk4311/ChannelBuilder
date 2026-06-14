@@ -4,6 +4,7 @@ import {
   deleteChatSession,
   fetchChatSession,
   listChatSessions,
+  recordRun,
   sendChatMessage,
   type ChatSession,
 } from '@/api/chat'
@@ -65,6 +66,18 @@ export function useSendMessage(id: string | null) {
     onSuccess: (s) => {
       qc.setQueryData(['chat', s.id], s)
       qc.invalidateQueries({ queryKey: ['chat', 'list'] }) // title + thứ tự cập nhật
+    },
+  })
+}
+
+/** Ghi mốc pipeline (video / đăng xong) vào hội thoại. FE gọi khi run đổi mốc. */
+export function useRecordRun(id: string | null) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: () => recordRun(id!),
+    onSuccess: (s) => {
+      qc.setQueryData(['chat', s.id], s)
+      qc.invalidateQueries({ queryKey: ['chat', 'list'] })
     },
   })
 }

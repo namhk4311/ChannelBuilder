@@ -15,6 +15,7 @@ import {
   useChatSessions,
   useCreateSession,
   useDeleteSession,
+  useRecordRun,
   useSendMessage,
 } from '@/hooks/use-chat'
 import { useChatStore } from '@/stores/chat-store'
@@ -40,9 +41,11 @@ export default function ChatPage() {
   const sessions = useChatSessions()
   const session = useChatSession(sessionId)
   const send = useSendMessage(sessionId)
+  const record = useRecordRun(sessionId)
   const [draft, setDraft] = useState('')
   const scrollRef = useRef<HTMLDivElement>(null)
   const creating = useRef(false)
+  const recorded = useRef<Set<string>>(new Set())
 
   // Tạo session lần đầu (hoặc khi session cũ 404 / đã xoá).
   useEffect(() => {
@@ -74,6 +77,21 @@ export default function ChatPage() {
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' })
   }, [messages.length, send.isPending, runData?.status])
+
+  // Khi run tới mốc (video xong / đăng / huỷ / lỗi) → ghi vào hội thoại (backend
+  // idempotent; ref tránh gọi lặp mỗi lần re-render cùng 1 trạng thái).
+  useEffect(() => {
+    const rid = runData?.id
+    const st = runData?.status
+    if (!rid || !st) return
+    // Chỉ ghi khi run đã KẾT THÚC — video thành tin nhắn sau khi user duyệt/từ chối,
+    // không ghi lúc awaiting_approval (block confirm đang hiện video, tránh trùng).
+    if (!['completed', 'failed', 'rejected'].includes(st)) return
+    const key = `${rid}:${st}`
+    if (recorded.current.has(key)) return
+    recorded.current.add(key)
+    record.mutate()
+  }, [runData?.id, runData?.status, record])
 
   const onSend = (text: string) => {
     const t = text.trim()
@@ -187,7 +205,7 @@ export default function ChatPage() {
                   }
                 }}
                 placeholder={
-                  processing ? 'Đang chạy pipeline…' : 'Nhập ý tưởng, trả lời, hoặc gõ “chạy đi” / “đăng đi”…'
+                  processing ? 'Đang tạo video…' : 'Nhập ý tưởng, trả lời, hoặc gõ “tạo đi” / “đăng đi”…'
                 }
                 rows={1}
                 className="max-h-40 min-h-9 flex-1 resize-none border-0 bg-transparent px-0 py-1.5 text-sm shadow-none focus-visible:border-0 focus-visible:ring-0"
@@ -199,8 +217,8 @@ export default function ChatPage() {
                   variant="destructive"
                   className="size-9 shrink-0 animate-pulse rounded-full"
                   disabled
-                  title="Đang chạy pipeline…"
-                  aria-label="Đang chạy pipeline"
+                  title="Đang tạo video…"
+                  aria-label="Đang tạo video"
                 >
                   <Square className="size-3.5 fill-current" />
                 </Button>
@@ -217,7 +235,7 @@ export default function ChatPage() {
               )}
             </div>
             <p className="mt-1.5 text-center text-xs text-muted-foreground">
-              Đạo diễn AI điều khiển pipeline — nói ý tưởng, chọn nhạc, xác nhận để chạy.
+              Đạo diễn AI giúp bạn tạo video TikTok — nói ý tưởng, chọn nhạc, xác nhận để làm.
             </p>
           </div>
         </div>
@@ -227,7 +245,7 @@ export default function ChatPage() {
           <aside className="hidden w-[380px] shrink-0 flex-col border-l border-border pl-4 lg:flex xl:w-[440px]">
             <div className="mb-2 flex items-center gap-2">
               <Workflow className="size-4 text-primary" aria-hidden />
-              <h3 className="text-sm font-semibold text-foreground">Tiến trình pipeline</h3>
+              <h3 className="text-sm font-semibold text-foreground">Tiến trình tạo video</h3>
             </div>
             <div className="chat-scroll flex-1 overflow-y-auto pr-1">
               <WorkflowPanel run={runData} />

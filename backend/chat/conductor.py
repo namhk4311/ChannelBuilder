@@ -264,6 +264,81 @@ def delete_session(conv_id: str) -> bool:
     return store.delete(conv_id)
 
 
+def record_run_events(conv_id: str) -> Optional[dict]:
+    """Ghi các mốc pipeline (video dựng xong / đăng xong / huỷ / lỗi) thành tin nhắn
+    assistant trong hội thoại — lưu DB nên xem lại được. Idempotent: mỗi message gắn
+    khoá `event` (vd 'produced:run_0007'), chỉ thêm mốc chưa có. FE gọi khi run đổi mốc."""
+    conv = store.get(conv_id)
+    if conv is None:
+        return None
+    rid = conv.get("run_id")
+    if not rid:
+        return _public(conv)
+    try:
+        from workflow.runner import get_run
+        run = get_run(rid)
+    except Exception as e:  # noqa: BLE001
+        log.warning("conductor · get_run lỗi: %s", e)
+        run = None
+    if run is None:
+        return _public(conv)  # run đã mất (restart) — messages cũ vẫn còn
+
+    done = {m.get("event") for m in conv["messages"] if isinstance(m, dict)}
+    steps = {s["id"]: s for s in run.get("steps", [])}
+    added = False
+
+    # produced — CHỈ post video thành tin nhắn SAU khi user đã quyết (duyệt/từ chối)
+    # ở gate (human_approval.status ∈ ok/rejected). Lúc đang chờ (awaiting) thì block
+    # confirm (ApprovalGate) đã hiện video → không post để tránh trùng.
+    gate = steps.get("human_approval") or {}
+    gate_out = gate.get("output") or {}
+    video_url = gate_out.get("video_url")
+    if (video_url and gate.get("status") in ("ok", "rejected")
+            and f"produced:{rid}" not in done):
+        dur = gate_out.get("duration_sec")
+        dur_txt = f"(~{int(dur)}s) " if dur else ""
+        conv["messages"].append({
+            "role": "assistant", "event": f"produced:{rid}", "video_url": video_url,
+            "content": f"🎬 Video đã dựng xong {dur_txt}:".replace("  ", " "),
+        })
+        added = True
+
+    # published
+    pub = steps.get("publish_video") or {}
+    if pub.get("status") == "ok" and f"published:{rid}" not in done:
+        pout = pub.get("output") or {}
+        vid = pout.get("video_id")
+        link = pout.get("share_url") or pout.get("url")
+        tail = f" • video_id `{vid}`" if vid else (f" • {link}" if link else "")
+        conv["messages"].append({
+            "role": "assistant", "event": f"published:{rid}",
+            "content": f"✅ Đã đăng TikTok thành công (SELF_ONLY){tail}.\n\n"
+                       "Muốn làm video tiếp thì cứ nói chủ đề mới nha 👍",
+        })
+        added = True
+
+    if run.get("status") == "rejected" and f"rejected:{rid}" not in done:
+        conv["messages"].append({
+            "role": "assistant", "event": f"rejected:{rid}",
+            "content": "Đã huỷ — video không được đăng. Bạn muốn thử lại với chủ đề / kịch bản khác không?",
+        })
+        added = True
+
+    if run.get("status") == "failed" and f"failed:{rid}" not in done:
+        err = next((s.get("error") for s in run.get("steps", [])
+                    if s.get("status") == "failed" and s.get("error")), None)
+        conv["messages"].append({
+            "role": "assistant", "event": f"failed:{rid}",
+            "content": f"⚠️ Pipeline gặp lỗi{(': ' + err) if err else ''}. Bạn thử chạy lại nhé.",
+        })
+        added = True
+
+    if added:
+        store.save(conv)
+        conv = store.get(conv_id)
+    return _public(conv)
+
+
 def _set_title(conv: dict, fallback_text: str) -> None:
     """Title cho sidebar — set 1 lần: ưu tiên topic, fallback câu user đầu tiên."""
     if conv.get("title"):
@@ -329,11 +404,11 @@ def send_message(conv_id: str, text: str) -> Optional[dict]:
                 ui_kind = "running"
                 log.info("conductor · %s start pipeline → %s", conv_id, run["id"])
                 if not reply:
-                    reply = ("Đã khởi động pipeline 🚀 Mình sẽ quét trend, lên ý tưởng rồi "
-                             "viết kịch bản — bạn đọc & chỉnh kịch bản trước khi mình dựng video nhé.")
+                    reply = ("Đang tạo video nha 🚀 Mình sẽ lên ý tưởng & viết kịch bản, rồi "
+                             "đưa bạn đọc/chỉnh kịch bản trước khi dựng video nhé.")
             except Exception as e:  # noqa: BLE001
                 log.exception("conductor · start_run lỗi")
-                reply = reply or f"Không khởi động được pipeline: {e}"
+                reply = reply or f"Không tạo được video: {e}"
                 ui_kind = "chitchat"
 
     # --- action=decide_publish → human gate -------------------------------
