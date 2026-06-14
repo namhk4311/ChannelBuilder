@@ -33,10 +33,17 @@ class StartRunRequest(BaseModel):
                          description="Snap cut vào beat. Chỉ effective khi có music_track_id")
     music_volume: float = Field(0.3, ge=0.3, le=0.5,
                          description="Base gain music — clamped 0.3-0.5 (~-10 tới -6dB)")
+    review_script: bool = Field(False,
+                         description="Dừng ở gate cho human duyệt/sửa kịch bản trước khi dựng video")
 
 
 class ApprovalRequest(BaseModel):
     approve: bool
+
+
+class ScriptDecisionRequest(BaseModel):
+    approve: bool
+    script: Optional[str] = Field(None, description="Bản kịch bản đã sửa (optional). None = dùng bản gốc")
 
 
 @router.get("/agents")
@@ -51,7 +58,8 @@ def start_run(req: StartRunRequest) -> dict:
                             subtitles=req.subtitles, n_ideas=req.n_ideas,
                             music_track_id=req.music_track_id,
                             beat_sync=req.beat_sync,
-                            music_volume=req.music_volume)
+                            music_volume=req.music_volume,
+                            review_script=req.review_script)
 
 
 @router.get("/runs")
@@ -73,4 +81,15 @@ def decide_gate(run_id: str, req: ApprovalRequest) -> dict:
     if run is None:
         raise HTTPException(404, "Run không tồn tại (server restart?)")
     log.info("workflow %s · gate %s", run_id, "APPROVED" if req.approve else "REJECTED")
+    return run
+
+
+@router.post("/runs/{run_id}/script")
+def decide_script(run_id: str, req: ScriptDecisionRequest) -> dict:
+    run = runner.decide_script(run_id, req.approve, req.script)
+    if run is None:
+        raise HTTPException(404, "Run không tồn tại (server restart?)")
+    log.info("workflow %s · script gate %s%s", run_id,
+             "APPROVED" if req.approve else "REJECTED",
+             " (edited)" if req.approve and req.script else "")
     return run

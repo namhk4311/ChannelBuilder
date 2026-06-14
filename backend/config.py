@@ -55,6 +55,8 @@ AI_PLATFORM_BASE_URL = (
 AI_PLATFORM_API_KEY = os.getenv("AI_PLATFORM_API_KEY")  # required for producer + creative
 AI_PLATFORM_MODEL   = os.getenv("AI_PLATFORM_MODEL")   or "deepseek/deepseek-v4-flash"  # Producer
 CREATIVE_MODEL      = os.getenv("CREATIVE_MODEL")      or "minimax/minimax-m2.5"        # Creative
+# Chat Conductor (tab Chat) — mặc định dùng chung model với Creative, đổi độc lập qua env.
+CHAT_MODEL          = os.getenv("CHAT_MODEL")          or CREATIVE_MODEL                 # Conductor hội thoại
 # Scout giữ model RIÊNG (tách khỏi CREATIVE_MODEL) — sau này có thể đổi độc lập.
 SCOUT_MODEL         = os.getenv("SCOUT_MODEL")         or "minimax/minimax-m2.5"        # Scout (LLM extract)
 # true (default): Scout dùng LLM extract trang TikTok thật (metric=likes); false: chỉ dataset seed (đỡ quota).

@@ -40,6 +40,7 @@ from agents.producer import (
 )
 from agents.publisher import publisher_oauth_router
 from workflow import workflow_router
+from chat import chat_router
 
 # Setup logging ngay khi module load — uvicorn import server sẽ trigger
 setup_logging()
@@ -105,6 +106,7 @@ app.include_router(music_router)
 app.include_router(producer_router)
 app.include_router(publisher_oauth_router)
 app.include_router(workflow_router)
+app.include_router(chat_router)
 
 # Static frontend — mount LAST để /api routes ưu tiên
 STATIC_DIR.mkdir(exist_ok=True)
