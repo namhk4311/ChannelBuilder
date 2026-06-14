@@ -26,6 +26,7 @@ import { PipelineFlow } from '@/components/workflow/pipeline-flow'
 import { RunStepList } from '@/components/workflow/run-step-list'
 import { StepStatusChip } from '@/components/workflow/step-status-chip'
 import { TikTokConnectCard } from '@/components/workflow/tiktok-connect-card'
+import { MUSIC_PICKER_DEFAULT, MusicPicker, type MusicPickerValue } from '@/components/music-picker'
 
 const RUN_STATUS_AS_STEP: Record<RunStatus, StepStatus> = {
   running: 'running',
@@ -39,6 +40,7 @@ export default function WorkflowPage() {
   const library = useLibraryStore((s) => s.library)
   const [topic, setTopic] = useState('')
   const [subtitles, setSubtitles] = useState(true)
+  const [music, setMusic] = useState<MusicPickerValue>(MUSIC_PICKER_DEFAULT)
   const [runId, setRunId] = useState<string | null>(null)
 
   const agents = useAgents()
@@ -59,7 +61,14 @@ export default function WorkflowPage() {
 
   const handleStart = () =>
     start.mutate(
-      { topic: topic.trim() || null, library: library ?? 'vng_insider', subtitles },
+      {
+        topic: topic.trim() || null,
+        library: library ?? 'vng_insider',
+        subtitles,
+        music_track_id: music.music_track_id,
+        beat_sync: music.beat_sync,
+        music_volume: music.music_volume,
+      },
       { onError: (e) => toast.error(`Không khởi động được run: ${e.message}`) },
     )
 
@@ -73,7 +82,7 @@ export default function WorkflowPage() {
 
       {/* Run controls */}
       <Card>
-        <CardContent>
+        <CardContent className="space-y-4">
           <div className="flex flex-col md:flex-row md:items-center gap-3">
             <Input
               placeholder="Chủ đề (optional, dùng cho Creative)…"
@@ -95,8 +104,11 @@ export default function WorkflowPage() {
               <Play /> Chạy pipeline
             </Button>
           </div>
+
+          <MusicPicker value={music} onChange={setMusic} disabled={runActive} idPrefix="wf" />
+
           {!library && (
-            <p className="mt-2 text-xs text-muted-foreground">
+            <p className="text-xs text-muted-foreground">
               Chọn thư viện clip ở góc trên để chạy — Producer chỉ pick clip trong thư viện đang
               chọn.
             </p>

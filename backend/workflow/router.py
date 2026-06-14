@@ -26,6 +26,13 @@ class StartRunRequest(BaseModel):
     library: str = Field("vng_insider", description="Thư viện clip cho Producer")
     subtitles: bool = True
     n_ideas: int = Field(5, ge=1, le=10)
+    # Music params — mirror ProduceRequest, default cùng giá trị
+    music_track_id: Optional[str] = Field(None,
+                         description="ID track nhạc nền từ /api/music. None → không nhạc")
+    beat_sync: bool = Field(True,
+                         description="Snap cut vào beat. Chỉ effective khi có music_track_id")
+    music_volume: float = Field(0.3, ge=0.05, le=1.0,
+                         description="Base gain music (0.3 ≈ -10dB)")
 
 
 class ApprovalRequest(BaseModel):
@@ -41,7 +48,10 @@ def workflow_agents() -> dict:
 def start_run(req: StartRunRequest) -> dict:
     topic = (req.topic or "").strip() or None
     return runner.start_run(topic=topic, library=req.library,
-                            subtitles=req.subtitles, n_ideas=req.n_ideas)
+                            subtitles=req.subtitles, n_ideas=req.n_ideas,
+                            music_track_id=req.music_track_id,
+                            beat_sync=req.beat_sync,
+                            music_volume=req.music_volume)
 
 
 @router.get("/runs")

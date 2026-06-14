@@ -10,6 +10,7 @@ import { Switch } from '@/components/ui/switch'
 import { toast } from 'sonner'
 import { useProduce } from '@/hooks/use-produce'
 import { ProduceResultView } from '@/components/produce-result'
+import { MUSIC_PICKER_DEFAULT, MusicPicker, type MusicPickerValue } from '@/components/music-picker'
 
 interface ProducePanelProps {
   script: string
@@ -19,6 +20,7 @@ interface ProducePanelProps {
 /** Bước 3 — POST /api/produce (job nền 6 step) rồi poll progress tới khi có 3 link MinIO. */
 export function ProducePanel({ script, library }: ProducePanelProps) {
   const [subtitles, setSubtitles] = useState(true)
+  const [music, setMusic] = useState<MusicPickerValue>(MUSIC_PICKER_DEFAULT)
   const { start, job, jobId, reset } = useProduce()
 
   const status = job.data?.status
@@ -27,7 +29,14 @@ export function ProducePanel({ script, library }: ProducePanelProps) {
 
   const handleStart = () =>
     start.mutate(
-      { script: script.trim(), subtitles, library: library! },
+      {
+        script: script.trim(),
+        subtitles,
+        library: library!,
+        music_track_id: music.music_track_id,
+        beat_sync: music.beat_sync,
+        music_volume: music.music_volume,
+      },
       { onError: (e) => toast.error(`Không start được job: ${e.message}`) },
     )
 
@@ -61,6 +70,8 @@ export function ProducePanel({ script, library }: ProducePanelProps) {
           </Button>
         </div>
       </div>
+
+      <MusicPicker value={music} onChange={setMusic} disabled={running} idPrefix="prod" />
 
       {!jobId && (
         <p className="text-sm text-muted-foreground">

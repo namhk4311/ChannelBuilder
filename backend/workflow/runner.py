@@ -59,11 +59,17 @@ def _now() -> str:
 
 
 def _new_run(topic: str | None, library: str,
-             subtitles: bool, n_ideas: int) -> dict:
+             subtitles: bool, n_ideas: int,
+             music_track_id: str | None = None,
+             beat_sync: bool = True,
+             music_volume: float = 0.3) -> dict:
     run_id = f"run_{next(_SEQ):04d}"
     run = {
         "id": run_id, "topic": topic,
         "library": library, "subtitles": subtitles, "n_ideas": n_ideas,
+        "music_track_id": music_track_id,
+        "beat_sync": beat_sync,
+        "music_volume": music_volume,
         "status": "running", "created_at": _now(), "updated_at": _now(),
         "gate": {"decision": None, "decided_at": None},
         "steps": [
@@ -195,7 +201,10 @@ def _run_pipeline(run: dict) -> None:  # noqa: PLR0915 — pipeline tuần tự,
         from agents.producer.pipeline import produce_from_script
         produce_result = produce_from_script(
             package.get("script") or "", progress_cb=cb,
-            subtitles=run["subtitles"], library=run["library"])
+            subtitles=run["subtitles"], library=run["library"],
+            music_track_id=run["music_track_id"],
+            beat_sync=run["beat_sync"],
+            music_volume=run["music_volume"])
     except Exception as e:  # noqa: BLE001 — producer raise HTTPException/Exception
         return _fail_run(run, s, f"Producer lỗi: {e}")
     s["progress"] = 100
@@ -279,8 +288,14 @@ def _run_pipeline(run: dict) -> None:  # noqa: PLR0915 — pipeline tuần tự,
 # ------------------------------------------------------------------ public API
 
 def start_run(topic: str | None = None, library: str = "vng_insider",
-              subtitles: bool = True, n_ideas: int = 5) -> dict:
-    run = _new_run(topic, library, subtitles, n_ideas)
+              subtitles: bool = True, n_ideas: int = 5,
+              music_track_id: str | None = None,
+              beat_sync: bool = True,
+              music_volume: float = 0.3) -> dict:
+    run = _new_run(topic, library, subtitles, n_ideas,
+                   music_track_id=music_track_id,
+                   beat_sync=beat_sync,
+                   music_volume=music_volume)
 
     def _wrapper() -> None:
         try:
@@ -297,8 +312,9 @@ def start_run(topic: str | None = None, library: str = "vng_insider",
 
     threading.Thread(target=_wrapper, daemon=True,
                      name=f"workflow-{run['id']}").start()
-    log.info("workflow %s started (topic=%r library=%s)",
-             run["id"], topic, library)
+    log.info("workflow %s started (topic=%r library=%s music=%s beat_sync=%s vol=%.2f)",
+             run["id"], topic, library,
+             music_track_id or "—", beat_sync, music_volume)
     return run
 
 

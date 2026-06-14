@@ -18,6 +18,7 @@ import { useCategories } from '@/hooks/use-categories'
 import { useVideos } from '@/hooks/use-videos'
 import { CategoryManager } from '@/components/category-manager'
 import { ClipTable } from '@/components/clip-table'
+import { MusicLibrary } from '@/components/music-library'
 import { UploadClipDialog } from '@/components/upload-clip-dialog'
 
 /** Kho clip — quản lý category + upload + duyệt clip trong library đang chọn. */
@@ -118,6 +119,9 @@ export default function WarehousePage() {
           <UploadClipDialog library={library} open={uploadOpen} onOpenChange={setUploadOpen} />
         </>
       )}
+
+      {/* Thư viện nhạc nền — không scope theo library, dùng chung cho mọi Producer/Workflow */}
+      <MusicLibrary />
     </div>
   )
 }

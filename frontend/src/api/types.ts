@@ -107,3 +107,24 @@ export interface ProduceJob {
   result: ProduceResult | null
   error: string | null
 }
+
+/** 1 track nhạc nền — backend tự detect BPM + beats bằng librosa lúc upload. */
+export interface MusicTrack {
+  id: string
+  label: string | null
+  file: string
+  object_name: string
+  duration_sec: number | null
+  bpm: number | null
+  mood: string | null
+  size_bytes: number | null
+  uploaded_at: string | null
+  preview_url: string
+}
+
+export interface MusicUploadResponse {
+  id: string
+  bpm: number
+  duration_sec: number
+  n_beats: number
+}

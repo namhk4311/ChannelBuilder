@@ -76,6 +76,10 @@ export interface StartRunBody {
   topic?: string | null
   library: string
   subtitles?: boolean
+  n_ideas?: number
+  music_track_id?: string | null
+  beat_sync?: boolean
+  music_volume?: number // 0.05 - 1.0
 }
 
 export const fetchAgents = () => get<{ agents: Agent[] }>('/workflow/agents')
