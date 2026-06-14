@@ -71,6 +71,6 @@ def get_agents() -> list[dict]:
                "Dựng video: TTS tiếng Việt + LLM pick clip + ghép + phụ đề",
                "built", PRODUCER_TOOLS),
         _agent("publisher", "D", "Publisher",
-               "Đăng TikTok (SELF_ONLY) + kéo metric thật",
+               "Đăng TikTok + kéo metric",
                "built", publisher_tools, publisher_err),
     ]

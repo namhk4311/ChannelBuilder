@@ -295,9 +295,8 @@ def _run_pipeline(run: dict) -> None:  # noqa: PLR0915 — pipeline tuần tự,
         return _fail_run(run, s, result.get("error") or "publish failed", result)
     video_id = result.get("video_id")
     _finish_step(run, s, "ok", result,
-                 "Đăng thành công (SELF_ONLY)"
-                 + (f" • video_id {video_id}" if video_id else " • sandbox chưa trả video_id")
-                 + " • đăng TikTok THẬT",
+                 "Đăng thành công"
+                 + (f" • video_id {video_id}" if video_id else " • sandbox chưa trả video_id"),
                  data_source="real")
 
     # ---- 7. [D] get_video_metrics
