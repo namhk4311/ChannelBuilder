@@ -30,6 +30,7 @@ import { MUSIC_PICKER_DEFAULT, MusicPicker, type MusicPickerValue } from '@/comp
 
 const RUN_STATUS_AS_STEP: Record<RunStatus, StepStatus> = {
   running: 'running',
+  awaiting_script: 'awaiting',
   awaiting_approval: 'awaiting',
   completed: 'ok',
   failed: 'failed',

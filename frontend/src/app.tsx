@@ -5,6 +5,7 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { queryClient } from '@/lib/query-client'
 import { ErrorBoundary } from '@/components/error-boundary'
 import { LibraryPicker } from '@/components/library-picker'
+import ChatPage from '@/pages/chat'
 import StudioPage from '@/pages/studio'
 import WarehousePage from '@/pages/warehouse'
 import WorkflowPage from '@/pages/workflow'
@@ -13,12 +14,13 @@ import WorkflowPage from '@/pages/workflow'
 const BASENAME = import.meta.env.BASE_URL.replace(/\/+$/, '') || '/'
 
 const SECTION_PATHS: Record<string, string> = {
-  workflow: '/',
+  chat: '/',
+  workflow: '/workflow',
   studio: '/studio',
   warehouse: '/warehouse',
 }
 
-/** Nav 3 section (Tabs sync router) + library picker dùng chung mọi trang. */
+/** Nav section (Tabs sync router) + library picker dùng chung mọi trang. */
 function ShellNav() {
   const location = useLocation()
   const navigate = useNavigate()
@@ -26,12 +28,15 @@ function ShellNav() {
     ? 'warehouse'
     : location.pathname.startsWith('/studio')
       ? 'studio'
-      : 'workflow'
+      : location.pathname.startsWith('/workflow')
+        ? 'workflow'
+        : 'chat'
 
   return (
     <div className="flex flex-wrap items-center justify-between gap-3">
       <Tabs value={section} onValueChange={(v) => navigate(SECTION_PATHS[v] ?? '/')}>
         <TabsList>
+          <TabsTrigger value="chat">Chat</TabsTrigger>
           <TabsTrigger value="workflow">Workflow</TabsTrigger>
           {/* <TabsTrigger value="studio">Tạo video</TabsTrigger> */}
           <TabsTrigger value="warehouse">Kho clip</TabsTrigger>
@@ -48,10 +53,11 @@ export default function App() {
       <QueryClientProvider client={queryClient}>
         <BrowserRouter basename={BASENAME}>
           <div className="channel-builder px-4 py-6 md:px-6 md:py-8">
-            <div className="mx-auto max-w-7xl space-y-6 md:space-y-8">
+            <div className="mx-auto max-w-[1600px] space-y-6 md:space-y-8">
               <ShellNav />
               <Routes>
-                <Route index element={<WorkflowPage />} />
+                <Route index element={<ChatPage />} />
+                <Route path="workflow" element={<WorkflowPage />} />
                 <Route path="studio" element={<StudioPage />} />
                 <Route path="warehouse" element={<WarehousePage />} />
                 <Route path="*" element={<Navigate to="/" replace />} />

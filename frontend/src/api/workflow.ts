@@ -18,7 +18,13 @@ export interface Agent {
   tools: AgentTool[]
 }
 
-export type RunStatus = 'running' | 'awaiting_approval' | 'completed' | 'failed' | 'rejected'
+export type RunStatus =
+  | 'running'
+  | 'awaiting_script'
+  | 'awaiting_approval'
+  | 'completed'
+  | 'failed'
+  | 'rejected'
 
 export type StepStatus =
   | 'pending'
@@ -80,6 +86,7 @@ export interface StartRunBody {
   music_track_id?: string | null
   beat_sync?: boolean
   music_volume?: number // 0.05 - 1.0
+  review_script?: boolean // dừng gate cho human duyệt/sửa kịch bản (Chat tab)
 }
 
 export const fetchAgents = () => get<{ agents: Agent[] }>('/workflow/agents')
@@ -92,3 +99,6 @@ export const startRun = (body: StartRunBody) => post<WorkflowRun>('/workflow/run
 
 export const decideGate = (runId: string, approve: boolean) =>
   post<WorkflowRun>(`/workflow/runs/${runId}/approval`, { approve })
+
+export const decideScript = (runId: string, approve: boolean, script?: string) =>
+  post<WorkflowRun>(`/workflow/runs/${runId}/script`, { approve, script })
