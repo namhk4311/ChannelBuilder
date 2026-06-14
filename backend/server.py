@@ -16,10 +16,12 @@ Layout: tất cả logic nằm trong package `video/` (chia theo chức năng).
 File này chỉ là entry point: lifespan + mount routers + serve static + log requests.
 """
 import logging
+import os
 import time
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from config import STATIC_DIR
@@ -55,6 +57,23 @@ async def lifespan(_: FastAPI):
 
 
 app = FastAPI(title="VNG Insider · Clip Warehouse", lifespan=lifespan)
+
+# CORS — frontend chạy khác origin (2 container trên AgentBase). Mặc định mở "*"
+# cho demo; siết bằng env CORS_ORIGINS="https://a,https://b" khi cần.
+_cors = os.getenv("CORS_ORIGINS", "*").strip()
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"] if _cors == "*" else [o.strip() for o in _cors.split(",") if o.strip()],
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+@app.get("/health")
+async def health():
+    """Healthcheck cho AgentBase Runtime — trả 200 khi app đã sẵn sàng."""
+    return {"status": "ok"}
 
 
 @app.middleware("http")

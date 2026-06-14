@@ -1,4 +1,6 @@
 # syntax=docker/dockerfile:1.6
+# VNG Insider — frontend (React/Vite) cho AgentBase Runtime.
+# server.cjs serve static + proxy /api → backend. Contract AgentBase: port 8080 + /health.
 
 # ---- Build stage ----
 FROM node:22-alpine AS build
@@ -6,40 +8,34 @@ WORKDIR /app
 
 RUN corepack enable && corepack prepare pnpm@11 --activate
 
-ARG ENVIRONMENT
-
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
-
 RUN pnpm install --frozen-lockfile
 
-# Copy source (.dockerignore strips local env files)
 COPY . .
 
-# Copy the env file for the target environment into .env so Vite picks it up
-COPY .env .env
-
+# Build với default env: VITE_API_BASE_URL=/api, VITE_BASE_ROUTE=/.
+# Browser gọi same-origin "/api"; server.cjs proxy sang backend lúc runtime
+# (qua API_PROXY_TARGET) → không cần nhúng URL backend vào bundle.
 RUN pnpm build
 
 # ---- Runtime stage ----
 FROM node:22-alpine AS runtime
 WORKDIR /app
 
-ARG ENVIRONMENT
-
 ENV NODE_ENV=production
+ENV PORT=8080
 
-# Only server.cjs runtime deps — no app bundling happens here.
+# Chỉ deps cho server.cjs (serve static + proxy /api) — image gọn.
 RUN npm init -y >/dev/null && \
-    npm install --omit=dev --silent express@^5 cors@^2 dotenv@^17 && \
+    npm install --omit=dev --silent express@^5 cors@^2 dotenv@^17 http-proxy-middleware@^3 && \
     npm cache clean --force
 
 COPY --from=build /app/dist ./dist
-COPY .env.${ENVIRONMENT} .env
 COPY server.cjs ./
 
-EXPOSE 7101
+EXPOSE 8080
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-  CMD wget -qO- "http://localhost:${PORT}${BASE_ROUTE:-/}" >/dev/null 2>&1 || exit 1
+  CMD wget -qO- "http://localhost:${PORT}/health" >/dev/null 2>&1 || exit 1
 
 CMD ["node", "server.cjs"]

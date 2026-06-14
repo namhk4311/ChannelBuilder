@@ -36,3 +36,13 @@ venv/
 
 # Docker
 *.pid
+
+# gigikit-managed (do not edit this block)
+.claude/
+CLAUDE.md
+AGENTS.md
+plans/templates/
+# end gigikit-managed
+.greennode.json
+.agentbase/
+.env.agentbase

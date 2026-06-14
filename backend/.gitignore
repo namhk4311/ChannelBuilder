@@ -10,4 +10,4 @@ agents/creative/result/
 agents/scout/samples/
 logs/
 
-__pycache__
+__pycache__.env.agentbase

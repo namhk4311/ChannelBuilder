@@ -1,0 +1,12 @@
+.venv
+__pycache__
+*.pyc
+.env
+.env.*
+data_raw
+.git
+.gitignore
+.DS_Store
+*.log
+.agentbase
+architecture.html

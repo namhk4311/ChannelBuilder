@@ -4,10 +4,35 @@ const cors = require("cors")
 const path = require("path")
 
 const app = express()
-app.use(cors({ origin: '*' }))
+app.use(cors({ origin: "*" }))
+
+// Healthcheck cho AgentBase Runtime
+app.get("/health", (_, res) => res.status(200).json({ status: "ok" }))
+
+// Proxy /api → backend (server-side). Browser chỉ gọi same-origin "/api" → né CORS
+// + né việc endpoint AgentBase có thể gate token. API_PROXY_TARGET = URL public backend.
+// require trong try/catch để local `pnpm serve` không có dep cũng không crash.
+const API_TARGET = process.env.API_PROXY_TARGET || process.env.VITE_API_PROXY_TARGET
+if (API_TARGET) {
+  try {
+    const { createProxyMiddleware } = require("http-proxy-middleware")
+    app.use(
+      createProxyMiddleware({
+        target: API_TARGET,
+        changeOrigin: true,
+        secure: false,
+        pathFilter: (pathname) => pathname.startsWith("/api"),
+      })
+    )
+    console.log(`Proxy /api → ${API_TARGET}`)
+  } catch (e) {
+    console.warn(`http-proxy-middleware không nạp được (${e.message}) — /api sẽ không proxy`)
+  }
+} else {
+  console.warn("API_PROXY_TARGET chưa set — /api sẽ không hoạt động")
+}
 
 // Normalize base path: ensure leading "/", strip trailing "/".
-// Reads same env as vite (VITE_BASE_ROUTE) so dev/build/serve stay in sync.
 const rawBase = process.env.BASE_ROUTE || process.env.VITE_BASE_ROUTE || "/"
 const BASE_PATH = ("/" + rawBase.replace(/^\/+|\/+$/g, "")).replace(/\/+$/, "") || "/"
 const STATIC_MOUNT = BASE_PATH === "/" ? "/" : BASE_PATH
