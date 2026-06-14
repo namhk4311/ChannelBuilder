@@ -34,6 +34,7 @@ MINIO_SECURE   = os.getenv("MINIO_SECURE",   "false").lower() == "true"
 # Buckets
 BUCKET_SOURCES = os.getenv("BUCKET_SOURCES", "clips")
 BUCKET_OUTPUTS = os.getenv("BUCKET_OUTPUTS", "outputs")
+BUCKET_MUSIC   = os.getenv("BUCKET_MUSIC",   "music")
 
 # ─── Paths ───────────────────────────────────────────────────────────────────
 DATA_RAW_PATH = Path(os.getenv("DATA_RAW_PATH", "data_raw"))

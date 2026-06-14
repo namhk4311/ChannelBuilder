@@ -20,6 +20,7 @@ from .editor import router as editor_router
 from .importer import import_from_data_raw, router as importer_router
 from .libraries import router as libraries_router
 from .migrations_runner import run_migrations
+from .music import router as music_router
 from .pipeline import router as producer_router
 from .storage import init_buckets
 
@@ -32,5 +33,6 @@ __all__ = [
     "clips_router",
     "editor_router",
     "importer_router",
+    "music_router",
     "producer_router",
 ]

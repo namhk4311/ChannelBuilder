@@ -18,6 +18,7 @@ from __future__ import annotations
 import base64
 import json
 import logging
+import math
 import shutil
 import subprocess
 import tempfile
@@ -43,7 +44,7 @@ from config import (
 
 from . import tts_cache
 from .db import pg
-from .editor import concat_to_local
+from .editor import concat_to_local, concat_with_cut_timeline
 from .ffprobe import ffprobe_metadata
 from .storage import minio_client
 
@@ -102,6 +103,15 @@ class ProduceRequest(BaseModel):
     subtitles: bool = True   # burn phụ đề theo giọng đọc vào final
     library: str = Field("vng_insider", min_length=1, max_length=80,
                          description="Library scope — LLM chỉ pick clip trong lib này")
+    music_track_id: Optional[str] = Field(None,
+                         description="ID track nhạc nền từ /api/music. None → không có nhạc")
+    beat_sync: bool = Field(True,
+                         description="Snap cut transitions vào beat của music_track. Chỉ có hiệu lực khi music_track_id set")
+    music_volume: float = Field(0.3, ge=0.05, le=1.0,
+                         description="Base gain nhạc nền TRƯỚC sidechain duck. "
+                                     "0.3 = ~-10dB (mặc định, nhạc nền vừa nghe). "
+                                     "0.1 = -20dB (rất nhỏ). 0.7 = -3dB (gần ngang voice). "
+                                     "Sidechain vẫn duck thêm khi voice nói.")
 
 
 # ─── Helpers ────────────────────────────────────────────────────────────────
@@ -620,6 +630,93 @@ def mux_voice(video_path: Path, voice_path: Path, workdir: Path,
     return out
 
 
+def mux_voice_with_music(
+    video_path: Path,
+    voice_path: Path,
+    music_path: Path,
+    workdir: Path,
+    overlays: Optional[list[dict]] = None,
+    music_volume: float = 0.3,    # gain music base TRƯỚC sidechain duck (~-10dB)
+) -> Path:
+    """Mux video + voice + music với sidechain ducking + (optional) subtitle overlays.
+
+    Sidechain compress dùng voice làm trigger → music tự giảm volume khi
+    voice nói, return về full level khi voice yên. Mượt hơn volume envelope
+    cứng theo timestamps.
+
+    Output: re-encode H.264 (vì có audio filter graph) + AAC 192k.
+    """
+    out = workdir / "final.mp4"
+    music_db = 20 * math.log10(max(music_volume, 1e-3))
+    _step(5, "mux+music",
+          f"start · video={video_path.name} + voice={voice_path.name} + "
+          f"music={music_path.name} (base gain={music_volume:.2f} ≈ {music_db:+.1f}dB)"
+          + (f" + {len(overlays)} subs" if overlays else ""))
+
+    # Inputs: 0=video, 1=voice, 2=music (LOOP infinite), 3..=sub PNGs
+    # `-stream_loop -1` đứng TRƯỚC `-i music.mp3` → ffmpeg lặp decoder vô hạn.
+    # amix=duration=first cắt theo voice → music tự dừng khi voice hết, không
+    # cần biết music dài/ngắn so với voice.
+    cmd = ["ffmpeg", "-y",
+           "-i", str(video_path),
+           "-i", str(voice_path),
+           "-stream_loop", "-1", "-i", str(music_path)]
+    if overlays:
+        for ov in overlays:
+            cmd += ["-i", str(ov["png"])]
+
+    # Audio filter:
+    #   [2:a]volume → music_norm
+    #   [music_norm][1:a]sidechaincompress → ducked
+    #   [1:a][ducked]amix → aout
+    audio_filters = [
+        f"[2:a]volume={music_volume},aresample=48000,aformat=channel_layouts=stereo[music_norm]",
+        # threshold thấp = duck sớm; ratio 10 = duck mạnh khi voice present;
+        # attack nhanh 5ms để duck instant, release 250ms để mượt khi voice dừng
+        "[music_norm][1:a]sidechaincompress=threshold=0.05:ratio=10:attack=5:release=250[ducked]",
+        # amix weights voice:music = 1.0:1.0 (đã control level qua volume + sidechain)
+        "[1:a][ducked]amix=inputs=2:duration=first:dropout_transition=0[aout]",
+    ]
+
+    # Video filter: overlay subs nếu có (input index của subs bắt đầu từ 3)
+    if overlays:
+        video_filters = []
+        prev = "0:v"
+        for i, ov in enumerate(overlays):
+            label = f"v{i+1}"
+            video_filters.append(
+                f"[{prev}][{i+3}:v]overlay=(W-w)/2:H-h-{SUB_MARGIN_BOTTOM}"
+                f":enable='between(t,{ov['start']:.3f},{ov['end']:.3f})'[{label}]"
+            )
+            prev = label
+        video_map = f"[{prev}]"
+        filters = audio_filters + video_filters
+    else:
+        # Không subs → cần label video vẫn để nhất quán map
+        video_map = "0:v:0"
+        filters = audio_filters
+
+    cmd += [
+        "-filter_complex", ";".join(filters),
+        "-map", video_map,
+        "-map", "[aout]",
+        "-c:v", "libx264", "-preset", "fast", "-crf", "23",
+        "-c:a", "aac", "-b:a", "192k",
+        "-shortest",
+        "-movflags", "+faststart",
+        str(out),
+    ]
+    log.debug("[5/6] mux+music · cmd: %s", " ".join(cmd))
+    t0 = time.monotonic()
+    result = subprocess.run(cmd, capture_output=True, text=True, cwd=str(workdir))
+    if result.returncode != 0:
+        log.error("[5/6] mux+music · FAILED: %s", result.stderr[-400:])
+        raise HTTPException(500, f"Mux+music failed: {result.stderr[-400:]}")
+    _step(5, "mux+music",
+          f"output {out.name} ({_fmt_bytes(out.stat().st_size)}) in {time.monotonic()-t0:.2f}s")
+    return out
+
+
 # ─── STEP 6: Upload ─────────────────────────────────────────────────────────
 
 def upload_to_outputs(path: Path, object_name: str, content_type: str) -> str:
@@ -641,6 +738,9 @@ def produce_from_script(
     progress_cb: Optional[Callable[[int, str], None]] = None,
     subtitles: bool = True,
     library: str = "vng_insider",
+    music_track_id: Optional[str] = None,
+    beat_sync: bool = True,
+    music_volume: float = 0.3,
 ) -> dict:
     """
     Pipeline full 6 bước với log step-by-step + summary timing cuối.
@@ -648,6 +748,9 @@ def produce_from_script(
     progress_cb(percent, message) — gọi tại mỗi mốc để UI vẽ progress bar.
     subtitles — burn phụ đề theo giọng đọc vào final (cần timestamps từ TTS).
     library — scope LLM pick chỉ thấy clip trong library này.
+    music_track_id — None = không có nhạc nền (flow cũ); set = mix music.
+    beat_sync — chỉ tác động khi có music_track: snap cut vào beat gần nhất.
+    music_volume — base gain nhạc nền 0.05-1.0, default 0.3 (~-10dB nền nhẹ).
     """
     run_id = uuid.uuid4().hex[:12]
     workdir = Path(tempfile.mkdtemp(prefix=f"produce_{run_id}_"))
@@ -702,36 +805,109 @@ def produce_from_script(
         _step_done(2, "llm-pick", timings["2 llm-pick"], summaries["2 llm-pick"])
         _p(45, f"[2/6] LLM chọn xong {len(selected_ids)} clip")
 
-        # ── STEP 3: Concat ──────────────────────────────────────────────────
-        _p(47, f"[3/6] Đang ghép {len(selected_ids)} clip (ffmpeg)...")
-        t = time.monotonic()
-        _step(3, "concat", f"start · {len(selected_ids)} clips (mute_source=True)")
-        raw_path, video_duration = concat_to_local(
-            selected_ids, workdir=workdir, mute_source=True,
-        )
-        timings["3 concat"] = time.monotonic() - t
-        summaries["3 concat"] = f"raw video {video_duration:.2f}s"
-        _step_done(3, "concat", timings["3 concat"], summaries["3 concat"])
-        _p(72, f"[3/6] Ghép xong ({video_duration:.1f}s)")
+        # ── STEP 2b: Music + beat snap (nếu user chọn nhạc nền) ─────────────
+        beat_cuts: Optional[list[float]] = None
+        music_path: Optional[Path] = None
+        music_meta: Optional[dict] = None
+        if music_track_id:
+            from .music import (
+                beats_in_window, extend_beats_for_loop, snap_cuts_to_beats,
+                fetch_music_for_pipeline,
+            )
+            music_path = workdir / "music.mp3"
+            music_meta = fetch_music_for_pipeline(music_track_id, music_path)
+            if not music_meta:
+                log.warning("music_track_id=%s không tìm thấy — bỏ qua music",
+                            music_track_id)
+                music_path = None
+            else:
+                _step(2, "music",
+                      f"track='{music_meta['label']}' bpm={music_meta['bpm']:.1f} "
+                      f"dur={music_meta['duration_sec']:.1f}s")
+                # Nếu nhạc ngắn hơn voice → loop để cover toàn bộ video.
+                # Beat_times cũng được extend (offset = k * music_duration) để snap
+                # vẫn ăn beat trong phần loop.
+                if music_meta["duration_sec"] < voice_duration:
+                    n_loops = int(voice_duration / music_meta["duration_sec"]) + 1
+                    _step(2, "music",
+                          f"⤴ track ngắn hơn voice ({music_meta['duration_sec']:.1f}s "
+                          f"< {voice_duration:.1f}s) → loop x{n_loops} ở ffmpeg "
+                          f"+ extend beats để snap đủ phủ window")
+                if beat_sync:
+                    extended = extend_beats_for_loop(
+                        music_meta["beat_times"],
+                        music_meta["duration_sec"],
+                        voice_duration,
+                    )
+                    beats = beats_in_window(extended, voice_duration)
+                    beat_cuts = snap_cuts_to_beats(
+                        len(selected_ids), voice_duration, beats,
+                    )
+                    _step(2, "beat-sync",
+                          f"{len(beats)} beats trong {voice_duration:.1f}s "
+                          f"(extended từ {len(music_meta['beat_times'])} gốc) "
+                          f"→ {len(beat_cuts) - 1} cut snapped: "
+                          f"{[round(c, 2) for c in beat_cuts]}")
 
-        # ── STEP 4: Align ───────────────────────────────────────────────────
-        _p(75, "[4/6] Đang cân thời lượng video ↔ voice...")
-        t = time.monotonic()
-        silent_path, align_meta = align_to_voice(
-            raw_path, video_duration, voice_duration, workdir=workdir,
-        )
-        silent_duration = ffprobe_duration(silent_path)
-        timings["4 align"] = time.monotonic() - t
-        summaries["4 align"] = f"{align_meta['action']} → {silent_duration:.2f}s"
-        _step_done(4, "align", timings["4 align"], summaries["4 align"])
-        _p(85, f"[4/6] Align xong ({align_meta['action']})")
+        # ── STEP 3: Concat (variant theo beat_cuts nếu có) ──────────────────
+        if beat_cuts is not None:
+            _p(47, f"[3/6] Ghép {len(selected_ids)} clip theo beat ({len(beat_cuts)-1} cuts)...")
+            t = time.monotonic()
+            _step(3, "concat", f"start · BEAT-SYNC · {len(selected_ids)} clips")
+            silent_path, silent_duration = concat_with_cut_timeline(
+                selected_ids, beat_cuts, workdir=workdir,
+            )
+            timings["3 concat"] = time.monotonic() - t
+            summaries["3 concat"] = f"beat-sync {silent_duration:.2f}s = voice"
+            _step_done(3, "concat", timings["3 concat"], summaries["3 concat"])
+            _p(80, f"[3/6] Beat-sync xong ({silent_duration:.1f}s)")
+            # Beat-sync đã trim đúng voice_duration → SKIP step 4 align
+            timings["4 align"] = 0.0
+            summaries["4 align"] = "skip (beat-sync exact)"
+            align_meta = {
+                "action": "skip-beat-sync",
+                "target_sec": round(voice_duration, 3),
+                "beat_cuts": [round(c, 3) for c in beat_cuts],
+            }
+            _step(4, "align", "skip — beat-sync đã lock duration = voice")
+        else:
+            _p(47, f"[3/6] Đang ghép {len(selected_ids)} clip (ffmpeg)...")
+            t = time.monotonic()
+            _step(3, "concat", f"start · {len(selected_ids)} clips (mute_source=True)")
+            raw_path, video_duration = concat_to_local(
+                selected_ids, workdir=workdir, mute_source=True,
+            )
+            timings["3 concat"] = time.monotonic() - t
+            summaries["3 concat"] = f"raw video {video_duration:.2f}s"
+            _step_done(3, "concat", timings["3 concat"], summaries["3 concat"])
+            _p(72, f"[3/6] Ghép xong ({video_duration:.1f}s)")
 
-        # ── STEP 5: Mux (+ burn phụ đề nếu có) ──────────────────────────────
-        _p(87, "[5/6] Đang lồng tiếng + phụ đề..." if overlays
-               else "[5/6] Đang lồng tiếng vào video...")
+            # ── STEP 4: Align ───────────────────────────────────────────────
+            _p(75, "[4/6] Đang cân thời lượng video ↔ voice...")
+            t = time.monotonic()
+            silent_path, align_meta = align_to_voice(
+                raw_path, video_duration, voice_duration, workdir=workdir,
+            )
+            silent_duration = ffprobe_duration(silent_path)
+            timings["4 align"] = time.monotonic() - t
+            summaries["4 align"] = f"{align_meta['action']} → {silent_duration:.2f}s"
+            _step_done(4, "align", timings["4 align"], summaries["4 align"])
+            _p(85, f"[4/6] Align xong ({align_meta['action']})")
+
+        # ── STEP 5: Mux (+ burn phụ đề nếu có, + duck music nếu có) ─────────
+        _p(87, "[5/6] Đang lồng tiếng + nhạc nền + phụ đề..." if music_path
+               else ("[5/6] Đang lồng tiếng + phụ đề..." if overlays
+                     else "[5/6] Đang lồng tiếng vào video..."))
         t = time.monotonic()
-        final_path = mux_voice(silent_path, voice_path, workdir=workdir,
-                               overlays=overlays)
+        if music_path:
+            final_path = mux_voice_with_music(
+                silent_path, voice_path, music_path,
+                workdir=workdir, overlays=overlays,
+                music_volume=music_volume,
+            )
+        else:
+            final_path = mux_voice(silent_path, voice_path, workdir=workdir,
+                                   overlays=overlays)
         final_duration = ffprobe_duration(final_path)
         timings["5 mux"] = time.monotonic() - t
         summaries["5 mux"] = f"final {final_duration:.2f}s" + (" + subs" if overlays else "")
@@ -794,7 +970,10 @@ def produce_from_script(
 # ─── Endpoints (job + polling cho progress bar) ─────────────────────────────
 
 def _run_job(job_id: str, script: str, subtitles: bool = True,
-             library: str = "vng_insider") -> None:
+             library: str = "vng_insider",
+             music_track_id: Optional[str] = None,
+             beat_sync: bool = True,
+             music_volume: float = 0.3) -> None:
     """Chạy pipeline trong thread nền, cập nhật JOBS[job_id] theo tiến độ."""
     def cb(percent: int, message: str) -> None:
         job = JOBS.get(job_id)
@@ -805,7 +984,10 @@ def _run_job(job_id: str, script: str, subtitles: bool = True,
     JOBS[job_id]["status"] = "running"
     try:
         result = produce_from_script(script, progress_cb=cb, subtitles=subtitles,
-                                     library=library)
+                                     library=library,
+                                     music_track_id=music_track_id,
+                                     beat_sync=beat_sync,
+                                     music_volume=music_volume)
         JOBS[job_id].update(status="done", percent=100,
                             message="Hoàn tất ✓", result=result)
     except HTTPException as e:
@@ -830,11 +1012,14 @@ def produce_endpoint(body: ProduceRequest):
     _jobs_evict()
     threading.Thread(
         target=_run_job,
-        args=(job_id, body.script, body.subtitles, body.library),
+        args=(job_id, body.script, body.subtitles, body.library,
+              body.music_track_id, body.beat_sync, body.music_volume),
         daemon=True, name=f"produce-{job_id}",
     ).start()
-    log.info("produce job %s queued (script %d chars, subtitles=%s, library=%s)",
-             job_id, len(body.script), body.subtitles, body.library)
+    log.info("produce job %s queued (script %d chars, subtitles=%s, library=%s, "
+             "music=%s, beat_sync=%s, music_volume=%.2f)",
+             job_id, len(body.script), body.subtitles, body.library,
+             body.music_track_id or "—", body.beat_sync, body.music_volume)
     return {"job_id": job_id}
 
 

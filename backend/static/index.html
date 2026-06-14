@@ -27,6 +27,9 @@
   header { display: flex; align-items: baseline; gap: 12px; margin-bottom: 6px; flex-wrap: wrap; }
   h1 { font-size: 22px; margin: 0; }
   .badge { background: var(--vng); color: white; padding: 3px 10px; border-radius: 999px; font-size: 11px; font-weight: 700; letter-spacing: 0.5px; }
+  .admin-links { margin-left: auto; display: flex; gap: 6px; }
+  .admin-links a { font-size: 12px; padding: 5px 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text-2); text-decoration: none; transition: all 0.15s; }
+  .admin-links a:hover { border-color: var(--vng); color: var(--vng); background: var(--bg); }
   .sub { color: var(--text-2); margin-bottom: 24px; font-size: 14px; }
 
   .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 20px; margin-bottom: 14px; }
@@ -207,6 +210,9 @@
   .creative-options input[type=number] { width: 64px; padding: 6px 8px; font: inherit; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: var(--text-1); text-align: center; }
   .creative-options input[type=number]:focus { outline: 2px solid var(--vng); outline-offset: -1px; border-color: transparent; }
 
+  /* Music library — Card 5 (table style, giống Card 4) */
+  .music-bpm-tag { display: inline-block; background: rgba(238, 87, 35, 0.12); color: var(--vng); padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 700; font-variant-numeric: tabular-nums; }
+
   /* Library selector — global header */
   .library-bar { display: flex; align-items: center; gap: 14px; padding: 14px 18px; background: linear-gradient(135deg, var(--surface), var(--surface-2)); border: 1px solid var(--border); border-radius: 12px; margin-bottom: 16px; position: sticky; top: 8px; z-index: 5; box-shadow: 0 2px 8px rgba(0,0,0,0.04); }
   .library-bar-label { font-size: 11px; font-weight: 700; color: var(--text-2); text-transform: uppercase; letter-spacing: 0.6px; }
@@ -248,8 +254,13 @@
   <header>
     <h1>Clip Warehouse</h1>
     <span class="badge">VNG INSIDER</span>
+    <span class="admin-links">
+      <a href="http://localhost:9101" target="_blank" rel="noopener" title="MinIO Console — minioadmin/minioadmin">📦 MinIO</a>
+      <a href="http://localhost:8081/?pgsql=postgres&username=vng&db=vng_insider" target="_blank" rel="noopener" title="Adminer — vng/vng">🗄 Adminer</a>
+      <a href="http://localhost:8000/docs" target="_blank" rel="noopener" title="FastAPI auto docs">📜 API</a>
+    </span>
   </header>
-  <div class="sub">Postgres · MinIO · ffmpeg · 32 clip từ data_raw</div>
+  <div class="sub">Postgres · MinIO · ffmpeg · librosa beat-sync · ElevenLabs TTS · VNGCloud MaaS</div>
 
   <!-- Library selector — global, ảnh hưởng mọi card phía dưới -->
   <div class="library-bar">
@@ -399,6 +410,25 @@
       ⬆ Sinh kịch bản ở card 3a trước. Kịch bản sẽ hiện ở đây và nút "Tạo video" sẽ enable.
     </div>
     <div id="produceScriptMeta" class="script-meta hidden"></div>
+
+    <div class="creative-options" style="margin-top:12px;">
+      <label>Nhạc nền
+        <select id="produceMusic" style="font: inherit; padding: 5px 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: var(--text-1); min-width: 220px;">
+          <option value="">— Không nhạc —</option>
+        </select>
+      </label>
+      <label style="cursor:pointer;">
+        <input type="checkbox" id="produceBeatSync" checked style="accent-color: var(--vng);" />
+        Cut theo beat
+      </label>
+      <label title="Base gain trước sidechain duck. 30% = ~-10dB nền nhẹ (default), 50% = ~-6dB, 10% = ~-20dB rất nhỏ.">
+        Music volume
+        <input id="produceMusicVol" type="range" min="5" max="100" step="5" value="30"
+               style="accent-color: var(--vng); width: 100px; vertical-align: middle;" />
+        <span id="produceMusicVolLabel" style="font-variant-numeric: tabular-nums; color: var(--vng); min-width: 36px; display: inline-block;">30%</span>
+      </label>
+    </div>
+
     <div class="form-actions" style="align-items: center; gap: 16px;">
       <label style="font-size: 13px; cursor: pointer; user-select: none; display: inline-flex; align-items: center; gap: 6px;">
         <input type="checkbox" id="produceSubs" checked style="accent-color: var(--vng); width: 16px; height: 16px;" />
@@ -407,7 +437,7 @@
       <button id="produceBtn" disabled>🎬 Tạo video</button>
     </div>
     <div class="form-hint" style="margin-top: 6px;">
-      Agent sẽ: TTS giọng đọc (+ timestamps) → LLM chọn clip → ghép + align → mux voice + phụ đề → trả 3 link (silent / voice / final).
+      Agent sẽ: TTS giọng đọc → LLM chọn clip → ghép (snap beat nếu chọn nhạc) → mux voice + nhạc ducked + phụ đề → trả 3 link.
     </div>
     <div id="produceResult"></div>
   </section>
@@ -422,6 +452,41 @@
       </select>
     </div>
     <div id="list"></div>
+  </section>
+
+  <!-- Card 5: Music library -->
+  <section class="card">
+    <h2>5. Thư viện nhạc nền <span id="musicCountLabel" style="opacity:0.6"></span>
+        <span style="opacity:0.6; font-size: 14px;">· dùng cho beat-sync</span></h2>
+    <div class="form-hint" style="margin-bottom: 10px;">
+      Upload mp3 (download trend từ TikTok hoặc royalty-free). Backend auto detect BPM + beat times bằng librosa → dùng cho cut snap ở Card 3.
+    </div>
+    <div id="musicList"></div>
+    <div class="form-grid" style="margin-top: 14px;">
+      <div>
+        <label class="field">File mp3</label>
+        <input type="file" id="musicFile" accept="audio/mpeg,audio/mp3,audio/*" />
+      </div>
+      <div>
+        <label class="field">Tên nhạc</label>
+        <input type="text" id="musicLabel" placeholder="vd: Lofi 120 BPM" />
+      </div>
+      <div>
+        <label class="field">Mood</label>
+        <select id="musicMood">
+          <option value="">— chọn mood —</option>
+          <option value="chill">chill</option>
+          <option value="hype">hype</option>
+          <option value="cinematic">cinematic</option>
+          <option value="upbeat">upbeat</option>
+          <option value="emotional">emotional</option>
+          <option value="trending">trending</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-actions">
+      <button id="musicUploadBtn">🎵 Upload track</button>
+    </div>
   </section>
 
   <div id="result"></div>
@@ -624,6 +689,87 @@ async function loadMoods() {
   renderMoodDropdowns();
 }
 
+// ─── Music library — Card 5 ──────────────────────────────────────────────────
+let musicTracks = [];
+
+async function loadMusic() {
+  try {
+    const res = await fetch('/api/music');
+    musicTracks = await res.json();
+  } catch { musicTracks = []; }
+  renderMusicList();
+  renderMusicDropdown();
+}
+
+function fmtMusicDuration(sec) {
+  if (!sec) return '?:??';
+  const m = Math.floor(sec / 60), s = Math.floor(sec % 60);
+  return `${m}:${s.toString().padStart(2, '0')}`;
+}
+
+function renderMusicList() {
+  $('musicCountLabel').textContent = musicTracks.length
+    ? `· ${musicTracks.length} track` : '';
+  if (!musicTracks.length) {
+    $('musicList').innerHTML = '<div class="empty">Chưa có track nào — upload mp3 đầu tiên bên dưới.</div>';
+    return;
+  }
+  const rows = musicTracks.map(t => `
+    <tr data-id="${esc(t.id)}">
+      <td>
+        <div class="file-title" title="${esc(t.label || t.file)}">${esc(t.label || t.file)}</div>
+        <div class="desc" title="${esc(t.file || '')}">${esc(t.file || '—')}</div>
+      </td>
+      <td class="nowrap"><span class="music-bpm-tag">${(t.bpm || 0).toFixed(1)} BPM</span></td>
+      <td class="nowrap">${fmtMusicDuration(t.duration_sec)}</td>
+      <td>${t.mood ? `<span class="category-tag">${esc(t.mood)}</span>` : '—'}</td>
+      <td><audio controls preload="none" src="${esc(t.preview_url || '')}" style="height:30px; width:220px; max-width:100%"></audio></td>
+      <td class="nowrap">${fmtDate(t.uploaded_at)}</td>
+      <td class="center"><button class="danger-ghost" onclick="deleteMusic('${esc(t.id)}')">Xoá</button></td>
+    </tr>
+  `).join('');
+  $('musicList').innerHTML = `
+    <div style="overflow-x: auto;">
+    <table>
+      <thead><tr>
+        <th>Tên nhạc · File</th>
+        <th>BPM</th>
+        <th>Dur</th>
+        <th>Mood</th>
+        <th>Preview</th>
+        <th>Uploaded</th>
+        <th></th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+    </div>
+  `;
+}
+
+function renderMusicDropdown() {
+  const sel = $('produceMusic');
+  if (!sel) return;
+  const prev = sel.value;
+  sel.innerHTML = '<option value="">— Không nhạc —</option>'
+    + musicTracks.map(t =>
+        `<option value="${esc(t.id)}">${esc(t.label || t.file)} · ${(t.bpm || 0).toFixed(0)} BPM · ${fmtMusicDuration(t.duration_sec)}</option>`
+      ).join('');
+  if (prev) sel.value = prev;
+}
+
+async function deleteMusic(id) {
+  if (!confirm('Xoá track này?')) return;
+  try {
+    const res = await fetch('/api/music/' + encodeURIComponent(id), { method: 'DELETE' });
+    if (!res.ok) throw new Error((await res.json()).detail || 'Failed');
+    toast('Đã xoá track', 'success');
+    await loadMusic();
+  } catch (e) {
+    toast('Lỗi: ' + e.message, 'error');
+  }
+}
+window.deleteMusic = deleteMusic;
+
 function renderMoodDropdowns() {
   const opts = ['<option value="">— chọn mood —</option>']
     .concat(moods.map(m => `<option value="${esc(m)}">${esc(m)}</option>`))
@@ -819,6 +965,38 @@ window.deleteCategory = deleteCategory;
 
 // ─── Upload ──────────────────────────────────────────────────────────────────
 // clip_tag không expose UI — backend auto-derive từ category.default_tag.
+
+// Live label cho slider music volume
+$('produceMusicVol').oninput = (e) => {
+  $('produceMusicVolLabel').textContent = e.target.value + '%';
+};
+
+$('musicUploadBtn').onclick = async () => {
+  const file = $('musicFile').files[0];
+  if (!file) { toast('Chọn file mp3', 'error'); return; }
+  const btn = $('musicUploadBtn');
+  btn.disabled = true; btn.textContent = '⏳ Detecting beats...';
+
+  const fd = new FormData();
+  fd.append('file', file);
+  fd.append('label', $('musicLabel').value || file.name);
+  fd.append('mood', $('musicMood').value || '');
+
+  try {
+    const res = await fetch('/api/music', { method: 'POST', body: fd });
+    if (!res.ok) throw new Error((await res.json()).detail || 'Upload failed');
+    const data = await res.json();
+    toast(`Track ready · ${data.bpm.toFixed(1)} BPM · ${data.n_beats} beats`, 'success');
+    $('musicFile').value = '';
+    $('musicLabel').value = '';
+    $('musicMood').value = '';
+    await loadMusic();
+  } catch (e) {
+    toast('Lỗi: ' + e.message, 'error');
+  } finally {
+    btn.disabled = false; btn.textContent = '🎵 Upload track';
+  }
+};
 
 $('uploadBtn').onclick = async () => {
   const file = $('upFile').files[0];
@@ -1135,6 +1313,9 @@ $('produceBtn').onclick = async () => {
         script,
         subtitles: $('produceSubs').checked,
         library: currentLibrary,
+        music_track_id: $('produceMusic').value || null,
+        beat_sync: $('produceBeatSync').checked,
+        music_volume: parseInt($('produceMusicVol').value, 10) / 100,
       }),
     });
     if (!res.ok) throw new Error((await res.json()).detail || 'Failed');
@@ -1398,7 +1579,7 @@ $('deleteLibBtn').onclick = async () => {
 (async () => {
   // Load libraries FIRST — currentLibrary có thể được điều chỉnh nếu lib đã bị xoá
   await loadLibraries();
-  await Promise.all([loadCategories(), loadVideos(), loadMoods()]);
+  await Promise.all([loadCategories(), loadVideos(), loadMoods(), loadMusic()]);
 })();
 </script>
 </body>

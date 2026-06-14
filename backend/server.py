@@ -32,6 +32,7 @@ from agents.producer import (
     importer_router,
     init_buckets,
     libraries_router,
+    music_router,
     producer_router,
     run_migrations,
 )
@@ -81,6 +82,7 @@ app.include_router(categories_router)
 app.include_router(clips_router)
 app.include_router(importer_router)
 app.include_router(editor_router)
+app.include_router(music_router)
 app.include_router(producer_router)
 app.include_router(publisher_oauth_router)
 app.include_router(workflow_router)
