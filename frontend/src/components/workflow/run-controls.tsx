@@ -134,7 +134,7 @@ export function RunControls({
         <div className="flex flex-col gap-3 border-t border-border pt-4 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-xs text-muted-foreground">
             {hasLibrary
-              ? 'Pipeline chạy: Scout → Creative → Producer → gate duyệt → Publisher.'
+              ? 'Pipeline chạy: Scout → Creative → Producer → Publisher → Analyst.'
               : 'Chọn thư viện clip ở góc trên để chạy — Producer chỉ pick clip trong thư viện đang chọn.'}
           </p>
           <Button

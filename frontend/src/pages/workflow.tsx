@@ -147,7 +147,7 @@ export default function WorkflowPage() {
             <EmptyState
               variant="dashed"
               title="Chưa có run nào"
-              description="Bấm “Chạy pipeline” để Orchestrator chạy end-to-end: Scout → Creative → Producer → gate → Publisher."
+              description="Bấm “Chạy pipeline” để Orchestrator chạy end-to-end: Scout → Creative → Producer → Publisher → Analyst."
             />
           )}
           {runId && run.isLoading && (
