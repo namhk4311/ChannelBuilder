@@ -8,6 +8,7 @@ runs/
 agents/publisher/tokens.json
 agents/creative/result/
 agents/scout/samples/
+agents/analyst/analyst_state.json
 logs/
 
 __pycache__.env.agentbase

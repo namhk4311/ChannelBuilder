@@ -5,7 +5,7 @@ tưởng văn bản → kịch bản → giọng đọc → ghép video → đă
 GreenNode Claw-a-thon (7 ngày).
 
 > Trạng thái: **Card 1-4 + Creative + Producer + Publisher (with scheduling) đã chạy E2E**.
-> Workflow orchestration hoàn toàn (A→E pipeline + human gate). Scout + Analyst chưa khởi tạo.
+> Workflow orchestration hoàn toàn (A→E pipeline + human gate). Scout + Analyst đã khởi tạo (2026-06-13/15).
 
 ---
 
@@ -14,7 +14,7 @@ GreenNode Claw-a-thon (7 ngày).
 ```
               ┌───── [A] Scout ─────┐       ┌──── [E] Analyst ────┐
               │ trend research      │       │ metric gate         │
-              │ (chưa khởi tạo)     │       │ (chưa khởi tạo)     │
+              │ (built)             │       │ (built)             │
               └──────────┬──────────┘       └──────────┬──────────┘
                          │ trend_digest                │ insight_digest
                          ▼                             ▼
@@ -276,6 +276,10 @@ Workflow orchestrator sẽ tự chọn path dựa vào input; không cần confi
 | GET | `/api/publisher/schedule` | List calendar + status (filter `?status=`) |
 | DELETE | `/api/publisher/schedule/{id}` | Cancel pending post |
 | POST | `/api/publisher/schedule/run-now` | Trigger scheduler tick ngay (demo) |
+| GET | `/api/analyst/batches` | List batch analytics + decisions |
+| POST | `/api/analyst/analyze` | Run analysis (passA/B gate) trên batch |
+| POST | `/api/analyst/confirm` | Affirm decision (SCALE/MONITOR/KILL) |
+| GET | `/api/analyst/insight` | Fetch last insight digest → [B] |
 | POST | `/api/workflow/runs/{id}/approval` | Gate decision (`decision: 'now'|'schedule'|'reject'`) |
 
 ---
@@ -379,8 +383,7 @@ curl -sS http://localhost:8000/openapi.json \
 
 ## Out of scope (chưa làm)
 
-- **Scout [A]** — trend research từ Reddit/X/TikTok hashtag
-- **Analyst [E]** — fetch metrics + ranking + insight digest
+- **Retention_3s proxy** — TikTok basic API chưa return retention_3s; Analyst gate hiện mock dùng fallback. Khi TikTok audit app + open endpoint sẽ bỏ mock.
 - **Multi-tenancy** — 1 user / 1 channel duy nhất
 - **Auth** — UI public, không login (TikTok OAuth 1x setup)
 

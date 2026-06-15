@@ -3,10 +3,10 @@ import { Card, CardContent } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
 import type { Agent } from '@/api/workflow'
 
-/** Catalog 4 agent + tool definitions đọc live từ TOOL_DEFINITIONS của từng package. */
+/** Catalog 5 agent + tool definitions đọc live từ TOOL_DEFINITIONS của từng package. */
 export function AgentCatalog({ agents }: { agents: Agent[] }) {
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
       {agents.map((agent) => (
         <Card key={agent.key}>
           <CardContent className="space-y-3">

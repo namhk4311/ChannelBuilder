@@ -1,0 +1,11 @@
+{
+  "batch": "batch_2026_w25_bad",
+  "nhan": "Batch dở (4 video — cả lô đều dưới ngưỡng)",
+  "nguong_tuyet_doi_retention": 65,
+  "videos": [
+    {"id": "b01", "chu_de": "Lượn lờ hành lang văn phòng VNG", "hook_type": "tả cảnh", "do_dai": 56, "views": 28000, "retention_3s_pct": 52, "shares": 90},
+    {"id": "b02", "chu_de": "Cây xanh quanh khuôn viên VNG", "hook_type": "tả cảnh", "do_dai": 59, "views": 21000, "retention_3s_pct": 47, "shares": 60},
+    {"id": "b03", "chu_de": "Toàn cảnh khuôn viên VNG buổi sáng", "hook_type": "tả cảnh", "do_dai": 52, "views": 44000, "retention_3s_pct": 61, "shares": 230},
+    {"id": "b04", "chu_de": "Góc nghỉ trưa yên tĩnh ở VNG", "hook_type": "tả cảnh", "do_dai": 61, "views": 17000, "retention_3s_pct": 39, "shares": 40}
+  ]
+}

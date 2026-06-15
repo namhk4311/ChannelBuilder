@@ -9,8 +9,34 @@ import {
 import { Progress } from '@/components/ui/progress'
 import { cn } from '@/lib/utils'
 import type { RunStep } from '@/api/workflow'
+import type { AnalyzeResult, InsightDigest } from '@/api/analyst'
+import { AnalystStepOutput } from '@/components/workflow/analyst-step-output'
+import { InsightBlock } from '@/components/workflow/analyst-insight-block'
 import { StepOutput } from '@/components/workflow/step-output'
 import { StepStatusChip } from '@/components/workflow/step-status-chip'
+
+/** Body output 1 step: [E] dùng bảng graded riêng; [B] hiện insight đã nạp (nếu có) trên bảng ý tưởng. */
+function StepBody({ step }: { step: RunStep }) {
+  const out = step.output
+  if (step.tool === 'analyze_batch' && Array.isArray((out as AnalyzeResult)?.videos)) {
+    return <AnalystStepOutput output={out as AnalyzeResult} />
+  }
+  const usedInsight =
+    step.tool === 'generate_ideas'
+      ? (out as { used_insight?: InsightDigest })?.used_insight
+      : undefined
+  return (
+    <div className="space-y-3">
+      {usedInsight && (
+        <InsightBlock
+          digest={usedInsight}
+          title={`Creative đã học từ Analyst — batch ${usedInsight.batch}`}
+        />
+      )}
+      <StepOutput tool={step.tool} output={out} />
+    </div>
+  )
+}
 
 function fmtElapsed(ms: number): string {
   if (ms < 1000) return `${ms}ms`
@@ -79,8 +105,17 @@ export function RunStepList({ steps, ordinal }: { steps: RunStep[]; ordinal?: bo
     .filter((s) => !HIDDEN_STEPS.has(s.id))
     .slice()
     .sort((a, b) => stepRank(a.id) - stepRank(b.id))
+
+  // Tự bung bước [E] Analyst khi chạy xong để show ngay bảng + insight + đề xuất SCALE
+  // (vẫn giữ các toggle thủ công của user).
+  const [open, setOpen] = useState<string[]>([])
+  const analystDone = steps.some((s) => s.id === 'analyze_batch' && s.status === 'ok')
+  useEffect(() => {
+    if (analystDone) setOpen((prev) => (prev.includes('analyze_batch') ? prev : [...prev, 'analyze_batch']))
+  }, [analystDone])
+
   return (
-    <Accordion type="multiple" className="w-full">
+    <Accordion type="multiple" value={open} onValueChange={setOpen} className="w-full">
       {visibleSteps.map((step, i) => {
         const expandable = step.output != null || step.error != null
         const showProgress = step.status === 'running' && step.progress != null
@@ -118,7 +153,7 @@ export function RunStepList({ steps, ordinal }: { steps: RunStep[]; ordinal?: bo
               <AccordionContent>
                 <div className="space-y-2">
                   {step.error && <p className="text-sm text-destructive">Lỗi: {step.error}</p>}
-                  {step.output != null && <StepOutput tool={step.tool} output={step.output} />}
+                  {step.output != null && <StepBody step={step} />}
                 </div>
               </AccordionContent>
             )}

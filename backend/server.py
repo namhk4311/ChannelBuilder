@@ -44,6 +44,7 @@ from agents.publisher import (
     shutdown_scheduler,
     start_scheduler,
 )
+from agents.analyst import analyst_router
 from workflow import workflow_router
 from chat import chat_router
 
@@ -113,6 +114,7 @@ app.include_router(music_router)
 app.include_router(producer_router)
 app.include_router(publisher_oauth_router)
 app.include_router(publisher_schedule_router)
+app.include_router(analyst_router)
 app.include_router(workflow_router)
 app.include_router(chat_router)
 

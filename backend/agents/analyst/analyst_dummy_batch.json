@@ -1,0 +1,15 @@
+{
+  "batch": "batch_2026_w24",
+  "nhan": "Batch chính (8 video — vòng 1)",
+  "nguong_tuyet_doi_retention": 65,
+  "videos": [
+    {"id": "p01", "chu_de": "Đừng vào VNG nếu bạn ngại va chạm", "hook_type": "phủ định", "do_dai": 42, "views": 184000, "retention_3s_pct": 78, "shares": 2100},
+    {"id": "p02", "chu_de": "Một ngày của Starter ở VNG", "hook_type": "POV", "do_dai": 50, "views": 152000, "retention_3s_pct": 71, "shares": 1480},
+    {"id": "p03", "chu_de": "3 góc làm việc xịn nhất ở VNG", "hook_type": "liệt kê", "do_dai": 45, "views": 210000, "retention_3s_pct": 82, "shares": 2760},
+    {"id": "p04", "chu_de": "Tản mạn không gian xanh ở VNG", "hook_type": "tả cảnh", "do_dai": 55, "views": 61000, "retention_3s_pct": 58, "shares": 320},
+    {"id": "p05", "chu_de": "Đi một vòng các BU của VNG", "hook_type": "tả cảnh", "do_dai": 58, "views": 47000, "retention_3s_pct": 54, "shares": 210},
+    {"id": "p06", "chu_de": "Canteen VNG có gì mà ai cũng khen", "hook_type": "câu hỏi", "do_dai": 48, "views": 138000, "retention_3s_pct": 67, "shares": 1190},
+    {"id": "p07", "chu_de": "Văn phòng VNG nhìn từ trên cao", "hook_type": "tả cảnh", "do_dai": 60, "views": 39000, "retention_3s_pct": 49, "shares": 150},
+    {"id": "p08", "chu_de": "Khu vực sự kiện CLB ở VNG", "hook_type": "tả cảnh", "do_dai": 54, "views": 33000, "retention_3s_pct": 44, "shares": 120}
+  ]
+}

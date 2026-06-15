@@ -60,6 +60,15 @@ def get_agents() -> list[dict]:
         publisher_err = f"import agents.publisher lỗi: {e}"
         log.warning(publisher_err)
 
+    analyst_tools: list[dict] = []
+    analyst_err: str | None = None
+    try:
+        from agents.analyst import TOOL_DEFINITIONS as analyst_defs
+        analyst_tools = _tool_summaries(analyst_defs)
+    except Exception as e:  # noqa: BLE001 — catalog không được sập vì 1 agent
+        analyst_err = f"import agents.analyst lỗi: {e}"
+        log.warning(analyst_err)
+
     return [
         _agent("scout", "A", "Scout",
                "Quét trend thị trường + seed benchmark cho vòng đánh giá",
@@ -73,4 +82,7 @@ def get_agents() -> list[dict]:
         _agent("publisher", "D", "Publisher",
                "Đăng TikTok 2 chế độ (đăng ngay / lên lịch) qua 4 phanh an toàn + kéo metric",
                "built", publisher_tools, publisher_err),
+        _agent("analyst", "E", "Analyst",
+               "Absolute gate (2 phanh) + insight digest → Creative cho vòng sau",
+               "built", analyst_tools, analyst_err),
     ]

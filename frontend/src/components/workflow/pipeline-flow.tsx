@@ -7,7 +7,9 @@ import { StepStatusChip } from '@/components/workflow/step-status-chip'
 // Human gate ('orchestrator') tạm ẩn khỏi rail — gate vẫn chạy bình thường
 // (ApprovalGate card vẫn dừng pipeline chờ duyệt). Thêm lại 'orchestrator' giữa
 // 'producer' và 'publisher' để hiện lại node.
-const PIPELINE_ORDER = ['scout', 'creative', 'producer', 'publisher']
+// 'analyst' [E] đứng cuối — giờ là step thật trong run (analyze_batch sau Publisher),
+// render như mọi node agent (bám trạng thái run step).
+const PIPELINE_ORDER = ['scout', 'creative', 'producer', 'publisher', 'analyst']
 
 /** Gộp trạng thái các step của 1 agent trong run hiện tại thành 1 trạng thái node. */
 function agentRunStatus(steps: RunStep[]): StepStatus | null {
@@ -32,7 +34,7 @@ interface PipelineFlowProps {
 }
 
 /**
- * Rail pipeline A→B→C→★gate→D — human gate đứng giữa Producer và Publisher
+ * Rail pipeline A→B→C→★gate→D→E — human gate đứng giữa Producer và Publisher
  * đúng nguyên tắc "AI execute, Human decide". Mobile: cuộn ngang.
  */
 export function PipelineFlow({ agents, steps = [] }: PipelineFlowProps) {

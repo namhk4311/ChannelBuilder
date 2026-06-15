@@ -5,12 +5,12 @@ trước khi Publisher đăng; human bấm approve/reject từ UI.
 
 Chỉ chạy LIVE — mọi agent đã wire thật, không còn mode mock:
   1. [A] scan_trends        — Scout thật (phân tích deterministic dataset seed)
-  2. [B] generate_ideas     — LLM MaaS sinh ý tưởng (nhận trend_digest từ [A])
+  2. [B] generate_ideas     — LLM MaaS sinh ý tưởng (nhận trend_digest từ [A] + insight từ [E])
   3. [B] generate_script    — orchestrator chọn idea est_fit cao nhất → script
   4. [C] produce_video      — pipeline 6 bước thật (TTS + ghép clip + phụ đề), progress %
   5. [★] human_approval     — gate chờ human duyệt
-  6. [D] publish_video      — đăng TikTok thật (SELF_ONLY)
-  7. [D] get_video_metrics  — metric thật (cần video_id)
+  6. [D] publish_video      — đăng TikTok thật (SELF_ONLY) / lên lịch
+  7. [E] analyze_batch      — tự chạy sau Publisher: absolute gate batch + insight → [B]
 
 Mỗi step gắn `data_source` để UI nói rõ data thật hay seed:
   real (chạy thật) | sample (dataset seed) | stub (agent chưa build/wire).
@@ -21,12 +21,18 @@ from __future__ import annotations
 
 import itertools
 import logging
+import random
 import threading
+import time
 from datetime import datetime, timezone
 from typing import Any
 from zoneinfo import ZoneInfo
 
 log = logging.getLogger(__name__)
+
+# Loading giả của bước [E] Analyst (giây) — để thấy "agent đang chạy" lúc demo.
+_ANALYST_FAKE_DELAY_MIN = 60.0
+_ANALYST_FAKE_DELAY_MAX = 120.0
 
 STEP_PLAN: list[dict[str, str]] = [
     {"id": "scan_trends", "agent": "scout", "code": "A", "tool": "scan_trends",
@@ -45,8 +51,8 @@ STEP_PLAN: list[dict[str, str]] = [
      "title": "Human duyệt đăng video"},
     {"id": "publish_video", "agent": "publisher", "code": "D", "tool": "publish_video",
      "title": "Đăng TikTok"},
-    {"id": "get_video_metrics", "agent": "publisher", "code": "D", "tool": "get_video_metrics",
-     "title": "Kéo metric"},
+    {"id": "analyze_batch", "agent": "analyst", "code": "E", "tool": "analyze_batch",
+     "title": "Phân tích batch + insight (Analyst)"},
 ]
 
 _RUNS: dict[str, dict[str, Any]] = {}
@@ -155,6 +161,48 @@ def _fail_run(run: dict, s: dict, error: str, output: Any = None) -> None:
     run["updated_at"] = _now()
 
 
+_ANALYST_MSGS = [
+    "Gom batch 8 video gần nhất từ Publisher…",
+    "Chấm absolute gate: top 20% lô + ngưỡng tuyệt đối retention_3s…",
+    "Đối chiếu hook / độ dài / chủ đề theo từng video…",
+    "Rút insight digest (thắng / thua / đề xuất) cho vòng sau…",
+]
+
+
+def _run_analyst_step(run: dict) -> None:
+    """[E] Analyst — tự chạy sau Publisher: chấm absolute gate batch + insight digest.
+
+    Có loading giả ~1-2 phút (tick progress + message) để thấy agent đang làm việc;
+    sau đó chấm thật (run_analyst, deterministic) → output bảng graded + insight + scale_ids
+    hiển thị ngay trong timeline run. Analyst lỗi KHÔNG fail run (đăng đã xong).
+    """
+    s = _start_step(run, "analyze_batch")
+    total = random.uniform(_ANALYST_FAKE_DELAY_MIN, _ANALYST_FAKE_DELAY_MAX)
+    ticks = 40
+    for i in range(ticks):
+        time.sleep(total / ticks)
+        s["progress"] = int((i + 1) / ticks * 96)
+        s["summary"] = _ANALYST_MSGS[min(i * len(_ANALYST_MSGS) // ticks, len(_ANALYST_MSGS) - 1)]
+        run["updated_at"] = _now()
+    try:
+        from agents.analyst import run_analyst
+        result = run_analyst("analyst_dummy_batch")
+    except Exception as e:  # noqa: BLE001 — Analyst lỗi không được fail run (đăng đã xong)
+        s["progress"] = 100
+        _finish_step(run, s, "failed", None, "Phân tích batch lỗi", error=str(e))
+        run["status"] = "completed"
+        run["updated_at"] = _now()
+        return
+    s["progress"] = 100
+    scale_ids = result.get("scale_ids") or []
+    _finish_step(run, s, "ok", result,
+                 f"{result.get('top_k')} top lô • {len(scale_ids)} đề xuất SCALE "
+                 f"({', '.join(scale_ids) or '—'}) • insight sẵn cho vòng sau",
+                 data_source="real")
+    run["status"] = "completed"
+    run["updated_at"] = _now()
+
+
 def _run_pipeline(run: dict) -> None:  # noqa: PLR0915 — pipeline tuần tự, đọc từ trên xuống
     # ---- 1. [A] scan_trends — Scout Agent LLM extract TikTok thật (fallback seed)
     s = _start_step(run, "scan_trends")
@@ -183,18 +231,29 @@ def _run_pipeline(run: dict) -> None:  # noqa: PLR0915 — pipeline tuần tự,
                      "Scout lỗi — Creative chạy không có trend digest",
                      error=scout_result.get("error"), data_source="sample")
 
-    # ---- 2. [B] generate_ideas (nhận trend_digest từ Scout)
+    # ---- 2. [B] generate_ideas (nhận trend_digest từ Scout + insight_digest từ Analyst)
     s = _start_step(run, "generate_ideas")
+    # Đóng vòng học [E]→[B]: insight_digest của batch human đã confirm (nếu có).
+    # Import mềm + try/except — Analyst lỗi/chưa confirm KHÔNG được giết pipeline.
+    try:
+        from agents.analyst import get_active_insight
+        active_insight = get_active_insight()
+    except Exception:  # noqa: BLE001
+        active_insight = None
     from agents.creative import generate_ideas
     result = generate_ideas(topic=run["topic"], trend_digest=trend_for_creative,
-                            n_ideas=run["n_ideas"])
+                            insight_digest=active_insight, n_ideas=run["n_ideas"])
     ideas = result.get("ideas") or []
     if result.get("status") != "ok" or not ideas:
         return _fail_run(run, s, result.get("error") or "Không sinh được idea", result)
+    # Gắn insight đã NẠP vào output để UI hiện rõ "Creative học gì từ Analyst" (đóng vòng [E]→[B]).
+    if active_insight:
+        result["used_insight"] = active_insight
     pillars = ", ".join(sorted({str(i.get("pillar", "?")) for i in ideas}))
     _finish_step(run, s, "ok", result,
                  f"{len(ideas)} ý tưởng (pillar: {pillars}) • LLM MaaS sinh thật"
-                 + (" • bám trend từ Scout" if trend_for_creative else ""),
+                 + (" • bám trend từ Scout" if trend_for_creative else "")
+                 + (f" • học từ batch {active_insight.get('batch')}" if active_insight else ""),
                  data_source="real")
 
     # ---- 2b. [★] idea gate — Human chọn ý tưởng (chỉ khi pick_idea; mặc định auto est_fit)
@@ -356,11 +415,8 @@ def _run_pipeline(run: dict) -> None:  # noqa: PLR0915 — pipeline tuần tự,
         _finish_step(run, s, "scheduled", {"post": row},
                      f"Đã lên lịch {_fmt_local(scheduled_for)} • tick tự đăng tới giờ",
                      data_source="real")
-        s = _start_step(run, "get_video_metrics")
-        _finish_step(run, s, "skipped", None,
-                     "Bài đang chờ lịch — kéo metric sau khi đăng")
-        run["status"] = "completed"
-        run["updated_at"] = _now()
+        # [E] Analyst tự chạy ngay (bài đang chờ publish) — chấm batch + insight.
+        _run_analyst_step(run)
         return None
 
     # ---- decision == "now" → đăng ngay qua publish_service (đi qua đủ 4 phanh)
@@ -368,53 +424,36 @@ def _run_pipeline(run: dict) -> None:  # noqa: PLR0915 — pipeline tuần tự,
     _finish_step(run, s, "ok", s["output"], "Human đã duyệt — đăng ngay")
 
     # ---- 6. [D] publish_video (on-demand)
+    # Nguyên tắc: đăng THÀNH CÔNG hay LỖI (vì BẤT KỲ lý do gì) → vẫn chạy [E] Analyst.
+    # publish_video lỗi chỉ fail RIÊNG bước đó (chip đỏ), KHÔNG abort run (không _fail_run).
     s = _start_step(run, "publish_video")
     if not video_url:
         return _fail_run(run, s, "Producer không trả output_url — không có video để đăng")
     from agents.publisher.publish_service import publish_now
-    result = publish_now(snapshot, actor="human:ui", trigger="on_demand")
+    try:
+        result = publish_now(snapshot, actor="human:ui", trigger="on_demand")
+    except Exception as e:  # noqa: BLE001 — đăng lỗi bất kỳ (network/sandbox) vẫn cho Analyst chạy
+        _finish_step(run, s, "failed", None, f"Đăng lỗi: {e}", error=str(e), data_source="real")
+        _run_analyst_step(run)
+        return None
     pub_status = result.get("status")
     if pub_status == "skipped":
         # Phanh dedup/limit chặn — không phải lỗi, run vẫn completed.
         _finish_step(run, s, "skipped", result,
                      f"Bỏ qua đăng ({result.get('reason')})", data_source="real")
-        s = _start_step(run, "get_video_metrics")
-        _finish_step(run, s, "skipped", None, "Không đăng — bỏ qua kéo metric")
-        run["status"] = "completed"
-        run["updated_at"] = _now()
-        return None
-    if pub_status != "published":
-        return _fail_run(run, s,
-                         result.get("detail") or result.get("reason") or "publish failed", result)
-    video_id = result.get("video_id")
-    _finish_step(run, s, "ok", result,
-                 "Đăng thành công"
-                 + (f" • video_id {video_id}" if video_id else " • sandbox chưa trả video_id"),
-                 data_source="real")
-
-    # ---- 7. [D] get_video_metrics
-    s = _start_step(run, "get_video_metrics")
-    if not video_id:
-        # Sandbox không trả video_id ngay (cần scope video.list — việc còn mở của [D]).
-        _finish_step(run, s, "skipped", None,
-                     "Không có video_id từ sandbox — cần scope video.list, bỏ qua kéo metric")
-        run["status"] = "completed"
-        run["updated_at"] = _now()
-        return None
-    from agents.publisher.tools import get_video_metrics
-    result = get_video_metrics(video_ids=[video_id])
-    if result.get("status") != "ok":
-        # Đăng đã thành công — metric lỗi chỉ fail step, run vẫn completed.
-        _finish_step(run, s, "failed", result, error=result.get("error") or "metrics failed")
+    elif pub_status != "published":
+        # Đăng lỗi (quota/network/sandbox…) — vẫn chạy Analyst để có insight cho vòng sau.
+        err = result.get("detail") or result.get("reason") or "publish failed"
+        _finish_step(run, s, "failed", result, f"Đăng lỗi: {err}", error=err, data_source="real")
     else:
-        videos = result.get("videos") or []
-        m = videos[0] if videos else {}
+        video_id = result.get("video_id")
         _finish_step(run, s, "ok", result,
-                     f"{m.get('view_count', 0)} view • {m.get('like_count', 0)} like • "
-                     f"{m.get('comment_count', 0)} comment • {m.get('share_count', 0)} share • metric TikTok thật",
+                     "Đăng thành công"
+                     + (f" • video_id {video_id}" if video_id else " • sandbox chưa trả video_id"),
                      data_source="real")
-    run["status"] = "completed"
-    run["updated_at"] = _now()
+
+    # ---- 7. [E] analyze_batch — Analyst tự chạy (đăng OK / skip / lỗi đều tới đây)
+    _run_analyst_step(run)
     return None
 
 

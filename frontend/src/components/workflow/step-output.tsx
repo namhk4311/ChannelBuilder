@@ -89,6 +89,8 @@ const TOOL_HIDE: Record<string, string[]> = {
   // digest đã chứa mọi thứ; day_cho_* + chi_tiet là bản trùng/raw dành cho agent;
   // source đã hiển thị ở chip nguồn data.
   scan_trends: ['day_cho_creative', 'day_cho_analyst', 'chi_tiet', 'digest_tuan', 'source'],
+  // used_insight render riêng bằng InsightBlock (RunStepList) — ẩn khỏi bảng ý tưởng.
+  generate_ideas: ['used_insight'],
 }
 
 // String dài → render thành đoạn văn (không nhồi vào 1 dòng / 1 ô bảng).
