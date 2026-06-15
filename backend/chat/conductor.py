@@ -290,6 +290,52 @@ def delete_session(conv_id: str) -> bool:
     return store.delete(conv_id)
 
 
+# ---------- narrate: biến metadata từng step thành đoạn tự thoại dễ hiểu --------
+def _narrate_scout(out: dict) -> Optional[str]:
+    d = out.get("digest") or {}
+    n = d.get("so_video_quet")
+    top = (d.get("top_format") or [{}])[0].get("format")
+    dur = d.get("do_dai_toi_uu")
+    if dur:
+        dur = dur.split("(")[0].strip()   # bỏ jargon "(retention_3s_pct...)"
+    hooks = d.get("hook_pattern_thang") or []
+    chu_de = d.get("chu_de_hot") or []
+    if not n and not top:
+        return None
+    parts = [f"📊 Mình vừa lướt qua {n} video TikTok đang hot về mảng đi làm / công sở."
+             if n else "📊 Mình vừa khảo sát các video TikTok đang hot."]
+    obs = []
+    if top:
+        obs.append(f"kiểu video **{top}** đang giữ chân người xem tốt nhất")
+    if dur:
+        obs.append(f"nên làm dài tầm **{dur}**")
+    if hooks:
+        obs.append("mở đầu nên đánh kiểu " + " hoặc ".join(f"“{h}”" for h in hooks[:2]))
+    if obs:
+        parts.append("Mình nhận thấy: " + "; ".join(obs) + ".")
+    if chu_de:
+        parts.append("Chủ đề khán giả đang thích: " + ", ".join(chu_de) + ".")
+    parts.append("Mình sẽ bám mấy điểm này để nghĩ ý tưởng cho bạn nha! ✨")
+    return " ".join(parts)
+
+
+def _narrate_ideas(out: dict) -> Optional[str]:
+    ideas = out.get("ideas") or []
+    if not ideas:
+        return None
+    return (f"💡 Mình đã nghĩ ra {len(ideas)} ý tưởng video. "
+            "Bạn chọn 1 ý ở dưới để mình viết kịch bản nhé 👇")
+
+
+def _narrate_script(out: dict) -> Optional[str]:
+    pkg = out.get("package") or {}
+    title = (pkg.get("idea") or {}).get("title")
+    words = len((pkg.get("script") or "").split())
+    t = f" “{title}”" if title else ""
+    return (f"✍️ Mình đã chọn ý tưởng{t} và viết xong kịch bản (~{words} từ). "
+            "Mời bạn đọc & chỉnh ngay bên dưới trước khi mình dựng video nhé 👇")
+
+
 def record_run_events(conv_id: str) -> Optional[dict]:
     """Ghi các mốc pipeline (video dựng xong / đăng xong / huỷ / lỗi) thành tin nhắn
     assistant trong hội thoại — lưu DB nên xem lại được. Idempotent: mỗi message gắn
@@ -312,6 +358,19 @@ def record_run_events(conv_id: str) -> Optional[dict]:
     done = {m.get("event") for m in conv["messages"] if isinstance(m, dict)}
     steps = {s["id"]: s for s in run.get("steps", [])}
     added = False
+
+    # narrate từng bước "phân tích" thành đoạn tự thoại (post live khi step xong)
+    for sid, key, fn in (
+        ("scan_trends", "scout", _narrate_scout),
+        ("generate_ideas", "ideas", _narrate_ideas),
+        ("generate_script", "script", _narrate_script),
+    ):
+        st = steps.get(sid) or {}
+        if st.get("status") == "ok" and f"{key}:{rid}" not in done:
+            msg = fn(st.get("output") or {})
+            if msg:
+                conv["messages"].append({"role": "assistant", "event": f"{key}:{rid}", "content": msg})
+                added = True
 
     # produced — CHỈ post video thành tin nhắn SAU khi user đã quyết (duyệt/từ chối)
     # ở gate (human_approval.status ∈ ok/rejected). Lúc đang chờ (awaiting) thì block
@@ -424,6 +483,7 @@ def send_message(conv_id: str, text: str) -> Optional[dict]:
                     music_track_id=conv["spec"].get("music_track_id"),
                     beat_sync=bool(conv["spec"].get("beat_sync", True)),
                     music_volume=float(conv["spec"].get("music_volume", 0.3)),
+                    pick_idea=True,       # tab Chat: dừng cho user chọn ý tưởng
                     review_script=True,   # tab Chat: dừng cho user duyệt/sửa kịch bản
                     publish_mode=conv["spec"].get("publish_mode", "review_publish"),
                 )

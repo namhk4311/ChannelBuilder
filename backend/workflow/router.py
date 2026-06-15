@@ -50,9 +50,16 @@ class ApprovalRequest(BaseModel):
     approve: Optional[bool] = Field(None, description="[deprecated] True→now, False→reject")
 
 
+class IdeaDecisionRequest(BaseModel):
+    approve: bool
+    idea_index: Optional[int] = Field(None, description="Chỉ số ý tưởng được chọn (0-based)")
+
+
 class ScriptDecisionRequest(BaseModel):
     approve: bool
     script: Optional[str] = Field(None, description="Bản kịch bản đã sửa (optional). None = dùng bản gốc")
+    caption: Optional[str] = Field(None, description="Caption đã sửa (optional). None = dùng bản gốc")
+    hashtags: Optional[list[str]] = Field(None, description="Hashtag đã sửa (optional). None = dùng bản gốc")
 
 
 @router.get("/agents")
@@ -95,12 +102,22 @@ def decide_gate(run_id: str, req: ApprovalRequest) -> dict:
     return run
 
 
+@router.post("/runs/{run_id}/idea")
+def decide_idea(run_id: str, req: IdeaDecisionRequest) -> dict:
+    run = runner.decide_idea(run_id, req.approve, req.idea_index)
+    if run is None:
+        raise HTTPException(404, "Run không tồn tại (server restart?)")
+    log.info("workflow %s · idea gate %s (idx=%s)", run_id,
+             "APPROVED" if req.approve else "REJECTED", req.idea_index)
+    return run
+
+
 @router.post("/runs/{run_id}/script")
 def decide_script(run_id: str, req: ScriptDecisionRequest) -> dict:
-    run = runner.decide_script(run_id, req.approve, req.script)
+    run = runner.decide_script(run_id, req.approve, req.script, req.caption)
     if run is None:
         raise HTTPException(404, "Run không tồn tại (server restart?)")
     log.info("workflow %s · script gate %s%s", run_id,
              "APPROVED" if req.approve else "REJECTED",
-             " (edited)" if req.approve and req.script else "")
+             " (edited)" if req.approve and (req.script or req.caption) else "")
     return run

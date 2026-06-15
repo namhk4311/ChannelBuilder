@@ -27,6 +27,7 @@ import { MUSIC_PICKER_DEFAULT, type MusicPickerValue } from '@/components/music-
 
 const RUN_STATUS_AS_STEP: Record<RunStatus, StepStatus> = {
   running: 'running',
+  awaiting_idea: 'awaiting',
   awaiting_script: 'awaiting',
   awaiting_approval: 'awaiting',
   completed: 'ok',

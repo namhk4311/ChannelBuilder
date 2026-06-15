@@ -56,19 +56,32 @@ function StepTimer({ step }: { step: RunStep }) {
   )
 }
 
+// Thứ tự chuẩn của pipeline — sort phòng hờ data về không đúng thứ tự.
+const STEP_ORDER = [
+  'scan_trends', 'generate_ideas', 'idea_approval', 'generate_script', 'script_approval',
+  'produce_video', 'human_approval', 'publish_video', 'get_video_metrics',
+]
+const HIDDEN_STEPS = new Set(['idea_approval', 'human_approval', 'script_approval'])
+const stepRank = (id: string) => {
+  const i = STEP_ORDER.indexOf(id)
+  return i === -1 ? 999 : i
+}
+
 /**
  * Timeline step của 1 run — mỗi step expand được để xem output (bảng / JSON).
  * Step đang chạy hiển thị stopwatch live; Producer kèm progress bar % từ job 6 bước.
+ * `ordinal`: badge đánh số 1→N theo thứ tự (thay code agent lặp A/B/B/C/D/D).
  */
-export function RunStepList({ steps }: { steps: RunStep[] }) {
+export function RunStepList({ steps, ordinal }: { steps: RunStep[]; ordinal?: boolean }) {
   // Ẩn 2 gate khỏi timeline — gate có UI riêng (ScriptGate / ApprovalGate card).
-  // Bỏ filter này để hiện lại step.
-  const visibleSteps = steps.filter(
-    (s) => s.id !== 'human_approval' && s.id !== 'script_approval',
-  )
+  // Sort theo thứ tự chuẩn để luôn A→B→C→D dù data về lệch.
+  const visibleSteps = steps
+    .filter((s) => !HIDDEN_STEPS.has(s.id))
+    .slice()
+    .sort((a, b) => stepRank(a.id) - stepRank(b.id))
   return (
     <Accordion type="multiple" className="w-full">
-      {visibleSteps.map((step) => {
+      {visibleSteps.map((step, i) => {
         const expandable = step.output != null || step.error != null
         const showProgress = step.status === 'running' && step.progress != null
         return (
@@ -76,7 +89,7 @@ export function RunStepList({ steps }: { steps: RunStep[] }) {
             <AccordionTrigger className="py-3 min-w-0">
               <div className="flex flex-1 items-center gap-3 min-w-0 pr-2">
                 <span className="inline-flex items-center justify-center size-7 rounded-md bg-primary/10 text-primary text-xs font-semibold shrink-0">
-                  {step.code}
+                  {ordinal ? i + 1 : step.code}
                 </span>
                 <div className="min-w-0 flex-1 text-left">
                   <div className="flex items-center gap-2 flex-wrap">

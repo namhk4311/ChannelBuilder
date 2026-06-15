@@ -33,6 +33,8 @@ STEP_PLAN: list[dict[str, str]] = [
      "title": "Quét trend thị trường"},
     {"id": "generate_ideas", "agent": "creative", "code": "B", "tool": "generate_ideas",
      "title": "Sinh ý tưởng video"},
+    {"id": "idea_approval", "agent": "orchestrator", "code": "★", "tool": "idea_gate",
+     "title": "Human chọn ý tưởng"},
     {"id": "generate_script", "agent": "creative", "code": "B", "tool": "generate_script",
      "title": "Viết kịch bản + shot list"},
     {"id": "script_approval", "agent": "orchestrator", "code": "★", "tool": "script_gate",
@@ -50,6 +52,7 @@ STEP_PLAN: list[dict[str, str]] = [
 _RUNS: dict[str, dict[str, Any]] = {}
 _GATES: dict[str, threading.Event] = {}          # publish gate
 _SCRIPT_GATES: dict[str, threading.Event] = {}   # script review/edit gate
+_IDEA_GATES: dict[str, threading.Event] = {}     # idea selection gate
 _SEQ = itertools.count(1)
 _MAX_RUNS = 50
 
@@ -73,6 +76,7 @@ def _new_run(topic: str | None, library: str,
              beat_sync: bool = True,
              music_volume: float = 0.3,
              review_script: bool = False,
+             pick_idea: bool = False,
              publish_mode: str = "review_publish") -> dict:
     run_id = f"run_{next(_SEQ):04d}"
     run = {
@@ -82,13 +86,18 @@ def _new_run(topic: str | None, library: str,
         "beat_sync": beat_sync,
         "music_volume": music_volume,
         "review_script": review_script,
+        "pick_idea": pick_idea,
         # Chế độ đăng chọn từ đầu — gate đọc lại field này để hiện đúng nút
         # (đăng ngay vs lên lịch). Persist trên run nên không reset khi UI remount.
         "publish_mode": publish_mode,
         "status": "running", "created_at": _now(), "updated_at": _now(),
         "gate": {"decision": None, "decided_at": None, "scheduled_for": None},
         "script_gate": {"decision": None, "decided_at": None},
+        "idea_gate": {"decision": None, "decided_at": None},
+        "idea_choice": None,
         "script_override": None,
+        "caption_override": None,
+        "hashtags_override": None,
         "steps": [
             {"id": s["id"], "agent": s["agent"], "code": s["code"],
              "tool": s["tool"], "title": s["title"],
@@ -104,9 +113,11 @@ def _new_run(topic: str | None, library: str,
         _RUNS.pop(oldest["id"], None)
         _GATES.pop(oldest["id"], None)
         _SCRIPT_GATES.pop(oldest["id"], None)
+        _IDEA_GATES.pop(oldest["id"], None)
     _RUNS[run_id] = run
     _GATES[run_id] = threading.Event()
     _SCRIPT_GATES[run_id] = threading.Event()
+    _IDEA_GATES[run_id] = threading.Event()
     return run
 
 
@@ -186,9 +197,37 @@ def _run_pipeline(run: dict) -> None:  # noqa: PLR0915 — pipeline tuần tự,
                  + (" • bám trend từ Scout" if trend_for_creative else ""),
                  data_source="real")
 
-    # ---- 3. [B] generate_script — orchestrator chọn idea est_fit cao nhất
+    # ---- 2b. [★] idea gate — Human chọn ý tưởng (chỉ khi pick_idea; mặc định auto est_fit)
+    s = _start_step(run, "idea_approval")
+    if not run["pick_idea"]:
+        best = max(ideas, key=lambda i: i.get("est_fit") or 0)
+        _finish_step(run, s, "skipped", None,
+                     f"Tự chọn “{best.get('title')}” (est_fit cao nhất)")
+    else:
+        s["status"] = "awaiting"
+        run["status"] = "awaiting_idea"
+        s["output"] = {"ideas": [
+            {k: i.get(k) for k in ("title", "angle", "pillar", "est_fit")} for i in ideas
+        ]}
+        s["summary"] = "Pipeline tạm dừng — chờ human chọn ý tưởng"
+        run["updated_at"] = _now()
+        _IDEA_GATES[run["id"]].wait()
+        if run["idea_gate"]["decision"] != "approved":
+            _finish_step(run, s, "rejected", s["output"], "Human huỷ ở bước chọn ý tưởng")
+            for other in run["steps"]:
+                if other["status"] == "pending":
+                    other["status"] = "skipped"
+            run["status"] = "rejected"
+            run["updated_at"] = _now()
+            return None
+        idx = run.get("idea_choice")
+        best = ideas[idx] if isinstance(idx, int) and 0 <= idx < len(ideas) \
+            else max(ideas, key=lambda i: i.get("est_fit") or 0)
+        run["status"] = "running"
+        _finish_step(run, s, "ok", {"chosen": best.get("title")}, f"Đã chọn: {best.get('title')}")
+
+    # ---- 3. [B] generate_script — viết kịch bản cho ý tưởng đã chọn
     s = _start_step(run, "generate_script")
-    best = max(ideas, key=lambda i: i.get("est_fit") or 0)
     from agents.creative import generate_script
     result = generate_script(idea=best)
     package = result.get("package")
@@ -226,11 +265,19 @@ def _run_pipeline(run: dict) -> None:  # noqa: PLR0915 — pipeline tuần tự,
             run["status"] = "rejected"
             run["updated_at"] = _now()
             return None
+        edited = False
         if run.get("script_override"):
-            package["script"] = run["script_override"]   # bản kịch bản user đã sửa
+            package["script"] = run["script_override"]    # lời thoại user đã sửa
+            edited = True
+        if run.get("caption_override"):
+            package["caption"] = run["caption_override"]   # caption user đã sửa (dùng khi đăng)
+            edited = True
+        if run.get("hashtags_override"):
+            package["hashtags"] = run["hashtags_override"]  # hashtag user đã sửa (dùng khi đăng)
+            edited = True
         run["status"] = "running"
-        _finish_step(run, s, "ok", {"script": package.get("script")},
-                     "Đã duyệt kịch bản" + (" (đã sửa)" if run.get("script_override") else ""))
+        _finish_step(run, s, "ok", {"script": package.get("script"), "caption": package.get("caption")},
+                     "Đã duyệt kịch bản" + (" (đã sửa)" if edited else ""))
 
     # ---- 4. [C] produce_video — pipeline 6 bước, progress % thật
     s = _start_step(run, "produce_video")
@@ -374,12 +421,14 @@ def start_run(topic: str | None = None, library: str = "vng_insider",
               beat_sync: bool = True,
               music_volume: float = 0.3,
               review_script: bool = False,
+              pick_idea: bool = False,
               publish_mode: str = "review_publish") -> dict:
     run = _new_run(topic, library, subtitles, n_ideas,
                    music_track_id=music_track_id,
                    beat_sync=beat_sync,
                    music_volume=music_volume,
                    review_script=review_script,
+                   pick_idea=pick_idea,
                    publish_mode=publish_mode)
 
     def _wrapper() -> None:
@@ -427,8 +476,10 @@ def decide_gate(run_id: str, decision: str | None = None,
     return run
 
 
-def decide_script(run_id: str, approve: bool, script: str | None = None) -> dict | None:
-    """Quyết định ở script gate. approve=True + script (optional) → dùng bản đã sửa."""
+def decide_script(run_id: str, approve: bool, script: str | None = None,
+                  caption: str | None = None,
+                  hashtags: list[str] | None = None) -> dict | None:
+    """Quyết định ở script gate. approve=True + script/caption/hashtags (optional) → dùng bản đã sửa."""
     run = _RUNS.get(run_id)
     if run is None:
         return None
@@ -438,7 +489,28 @@ def decide_script(run_id: str, approve: bool, script: str | None = None) -> dict
     run["script_gate"]["decided_at"] = _now()
     if approve and script and script.strip():
         run["script_override"] = script.strip()
+    if approve and caption and caption.strip():
+        run["caption_override"] = caption.strip()
+    if approve and hashtags:
+        cleaned = [h.strip() for h in hashtags if h and h.strip()]
+        if cleaned:
+            run["hashtags_override"] = cleaned
     _SCRIPT_GATES[run_id].set()
+    return run
+
+
+def decide_idea(run_id: str, approve: bool, idea_index: int | None = None) -> dict | None:
+    """Quyết định ở idea gate. approve=True + idea_index → viết kịch bản cho ý tưởng đó."""
+    run = _RUNS.get(run_id)
+    if run is None:
+        return None
+    if run["status"] != "awaiting_idea":
+        return run  # idempotent — gate đã quyết hoặc chưa tới
+    run["idea_gate"]["decision"] = "approved" if approve else "rejected"
+    run["idea_gate"]["decided_at"] = _now()
+    if approve and isinstance(idea_index, int):
+        run["idea_choice"] = idea_index
+    _IDEA_GATES[run_id].set()
     return run
 
 

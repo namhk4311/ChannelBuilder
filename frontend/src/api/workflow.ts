@@ -20,6 +20,7 @@ export interface Agent {
 
 export type RunStatus =
   | 'running'
+  | 'awaiting_idea'
   | 'awaiting_script'
   | 'awaiting_approval'
   | 'completed'
@@ -121,5 +122,13 @@ export const startRun = (body: StartRunBody) => post<WorkflowRun>('/workflow/run
 export const decideGate = (runId: string, body: GateDecisionBody) =>
   post<WorkflowRun>(`/workflow/runs/${runId}/approval`, body)
 
-export const decideScript = (runId: string, approve: boolean, script?: string) =>
-  post<WorkflowRun>(`/workflow/runs/${runId}/script`, { approve, script })
+export const decideIdea = (runId: string, approve: boolean, ideaIndex?: number) =>
+  post<WorkflowRun>(`/workflow/runs/${runId}/idea`, { approve, idea_index: ideaIndex })
+
+export const decideScript = (
+  runId: string,
+  approve: boolean,
+  script?: string,
+  caption?: string,
+  hashtags?: string[],
+) => post<WorkflowRun>(`/workflow/runs/${runId}/script`, { approve, script, caption, hashtags })

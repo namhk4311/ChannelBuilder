@@ -7,6 +7,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { ConfirmDialog } from '@/components/common/confirm-dialog'
 import type { WorkflowRun } from '@/api/workflow'
 import { useScriptDecision } from '@/hooks/use-workflow'
+import { HashtagInput } from '@/components/chat/hashtag-input'
 
 interface ScriptOutput {
   script?: string
@@ -23,6 +24,8 @@ interface ScriptOutput {
 export function ScriptGate({ run }: { run: WorkflowRun }) {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState('')
+  const [draftCaption, setDraftCaption] = useState('')
+  const [draftHashtags, setDraftHashtags] = useState<string[]>([])
   const [confirmCancel, setConfirmCancel] = useState(false)
   const decision = useScriptDecision(run.id)
 
@@ -33,12 +36,19 @@ export function ScriptGate({ run }: { run: WorkflowRun }) {
 
   const startEdit = () => {
     setDraft(script)
+    setDraftCaption(out.caption ?? '')
+    setDraftHashtags(out.hashtags ?? [])
     setEditing(true)
   }
 
   const approve = () =>
     decision.mutate(
-      { approve: true, script: editing ? draft : undefined },
+      {
+        approve: true,
+        script: editing ? draft : undefined,
+        caption: editing ? draftCaption : undefined,
+        hashtags: editing ? draftHashtags : undefined,
+      },
       {
         onSuccess: () => toast.success('Đã duyệt kịch bản — đang dựng video'),
         onError: (e) => toast.error(`Không gửi được: ${e.message}`),
@@ -91,13 +101,31 @@ export function ScriptGate({ run }: { run: WorkflowRun }) {
               )}
             </div>
 
-            {out.caption && (
-              <p className="text-sm">
-                <span className="text-muted-foreground">Caption:</span> {out.caption}
-                {out.hashtags?.length ? (
-                  <span className="text-primary"> {out.hashtags.join(' ')}</span>
-                ) : null}
-              </p>
+            <div className="space-y-1">
+              <span className="text-xs uppercase tracking-wide text-muted-foreground">Caption</span>
+              {editing ? (
+                <Textarea
+                  value={draftCaption}
+                  onChange={(e) => setDraftCaption(e.target.value)}
+                  rows={3}
+                  className="w-full text-sm"
+                  placeholder="Caption khi đăng…"
+                />
+              ) : (
+                <p className="text-sm text-foreground">
+                  {out.caption || '—'}
+                  {out.hashtags?.length ? (
+                    <span className="text-primary"> {out.hashtags.join(' ')}</span>
+                  ) : null}
+                </p>
+              )}
+            </div>
+
+            {editing && (
+              <div className="space-y-1">
+                <span className="text-xs uppercase tracking-wide text-muted-foreground">Hashtag</span>
+                <HashtagInput value={draftHashtags} onChange={setDraftHashtags} />
+              </div>
             )}
 
             <div className="flex flex-wrap gap-2 pt-1">

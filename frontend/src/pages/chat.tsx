@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import { ArrowUp, Loader2, Plus, Square, Workflow } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -23,6 +23,7 @@ import { DirectorAvatar, MessageBubble } from '@/components/chat/message-bubble'
 import { OptionChips } from '@/components/chat/option-chips'
 import { HistorySidebar } from '@/components/chat/history-sidebar'
 import { WorkflowPanel } from '@/components/chat/workflow-panel'
+import { IdeaGate } from '@/components/chat/idea-gate'
 import { ScriptGate } from '@/components/chat/script-gate'
 import { ApprovalGate } from '@/components/workflow/approval-gate'
 
@@ -46,6 +47,33 @@ export default function ChatPage() {
   const scrollRef = useRef<HTMLDivElement>(null)
   const creating = useRef(false)
   const recorded = useRef<Set<string>>(new Set())
+
+  // Kéo co giãn độ rộng panel pipeline (persist localStorage).
+  const [panelWidth, setPanelWidth] = useState<number>(() => {
+    const v = Number(localStorage.getItem('vng-chat-panel-w'))
+    return v >= 300 && v <= 680 ? v : 420
+  })
+  const dragRef = useRef<{ x: number; w: number } | null>(null)
+  useEffect(() => {
+    localStorage.setItem('vng-chat-panel-w', String(panelWidth))
+  }, [panelWidth])
+  const onResizeStart = (e: ReactPointerEvent<HTMLDivElement>) => {
+    dragRef.current = { x: e.clientX, w: panelWidth }
+    e.currentTarget.setPointerCapture(e.pointerId)
+  }
+  const onResizeMove = (e: ReactPointerEvent<HTMLDivElement>) => {
+    if (!dragRef.current) return
+    const next = dragRef.current.w - (e.clientX - dragRef.current.x) // kéo trái → panel rộng hơn
+    setPanelWidth(Math.min(680, Math.max(300, next)))
+  }
+  const onResizeEnd = (e: ReactPointerEvent<HTMLDivElement>) => {
+    dragRef.current = null
+    try {
+      e.currentTarget.releasePointerCapture(e.pointerId)
+    } catch {
+      /* noop */
+    }
+  }
 
   // Tạo session lần đầu (hoặc khi session cũ 404 / đã xoá).
   useEffect(() => {
@@ -78,20 +106,22 @@ export default function ChatPage() {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' })
   }, [messages.length, send.isPending, runData?.status])
 
-  // Khi run tới mốc (video xong / đăng / huỷ / lỗi) → ghi vào hội thoại (backend
-  // idempotent; ref tránh gọi lặp mỗi lần re-render cùng 1 trạng thái).
+  // Mỗi khi có step MỚI hoàn tất → ghi narration/mốc vào hội thoại (live theo tiến
+  // trình). Backend idempotent + tự né duplicate; ref tránh gọi lặp cùng 'chữ ký'.
+  // (produced video chỉ post sau khi gate quyết — xem record_run_events.)
+  const doneSig = runData
+    ? runData.steps
+        .filter((s) => ['ok', 'skipped', 'failed', 'rejected'].includes(s.status))
+        .map((s) => s.id)
+        .join(',')
+    : ''
   useEffect(() => {
-    const rid = runData?.id
-    const st = runData?.status
-    if (!rid || !st) return
-    // Chỉ ghi khi run đã KẾT THÚC — video thành tin nhắn sau khi user duyệt/từ chối,
-    // không ghi lúc awaiting_approval (block confirm đang hiện video, tránh trùng).
-    if (!['completed', 'failed', 'rejected'].includes(st)) return
-    const key = `${rid}:${st}`
+    if (!runData?.id || !doneSig) return
+    const key = `${runData.id}:${doneSig}`
     if (recorded.current.has(key)) return
     recorded.current.add(key)
     record.mutate()
-  }, [runData?.id, runData?.status, record])
+  }, [runData?.id, doneSig, record])
 
   const onSend = (text: string) => {
     const t = text.trim()
@@ -187,6 +217,7 @@ export default function ChatPage() {
 
               {/* Gate cần user thao tác → hiện NGAY trong khung chat (mỗi gate tự
                   render null nếu chưa tới lượt). Flow view-only nằm ở sidebar phải. */}
+              {runData && <IdeaGate run={runData} />}
               {runData && <ScriptGate run={runData} />}
               {runData && <ApprovalGate run={runData} />}
             </div>
@@ -240,17 +271,34 @@ export default function ChatPage() {
           </div>
         </div>
 
-        {/* Cột phải — tiến trình pipeline (cowork style), chỉ trên lg+ */}
+        {/* Thanh kéo co giãn + cột phải tiến trình (cowork style), chỉ trên lg+ */}
         {runData && (
-          <aside className="hidden w-[380px] shrink-0 flex-col border-l border-border pl-4 lg:flex xl:w-[440px]">
-            <div className="mb-2 flex items-center gap-2">
-              <Workflow className="size-4 text-primary" aria-hidden />
-              <h3 className="text-sm font-semibold text-foreground">Tiến trình tạo video</h3>
+          <>
+            <div
+              role="separator"
+              aria-orientation="vertical"
+              onPointerDown={onResizeStart}
+              onPointerMove={onResizeMove}
+              onPointerUp={onResizeEnd}
+              title="Kéo để chỉnh độ rộng"
+              className="group hidden w-2 shrink-0 cursor-col-resize touch-none select-none items-stretch justify-center lg:flex"
+            >
+              {/* đường ngăn cách mảnh 1px; cả vùng w-2 vẫn kéo được */}
+              <div className="w-px bg-border transition-colors group-hover:bg-primary/50 group-active:bg-primary/60" />
             </div>
-            <div className="chat-scroll flex-1 overflow-y-auto pr-1">
-              <WorkflowPanel run={runData} />
-            </div>
-          </aside>
+            <aside
+              style={{ width: panelWidth }}
+              className="hidden shrink-0 flex-col pl-1 lg:flex"
+            >
+              <div className="mb-2 flex items-center gap-2">
+                <Workflow className="size-4 text-primary" aria-hidden />
+                <h3 className="text-sm font-semibold text-foreground">Tiến trình tạo video</h3>
+              </div>
+              <div className="chat-scroll flex-1 overflow-y-auto pr-1">
+                <WorkflowPanel run={runData} />
+              </div>
+            </aside>
+          </>
         )}
       </div>
 

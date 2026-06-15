@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   decideGate,
+  decideIdea,
   decideScript,
   fetchAgents,
   fetchRun,
@@ -10,7 +11,7 @@ import {
   type WorkflowRun,
 } from '@/api/workflow'
 
-const ACTIVE_STATUSES = ['running', 'awaiting_script', 'awaiting_approval']
+const ACTIVE_STATUSES = ['running', 'awaiting_idea', 'awaiting_script', 'awaiting_approval']
 
 export function useAgents() {
   return useQuery({
@@ -67,12 +68,26 @@ export function useGateDecision(runId: string | null) {
   })
 }
 
+/** Idea gate: chọn 1 ý tưởng (idea_index) / huỷ. */
+export function useIdeaDecision(runId: string | null) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (args: { approve: boolean; ideaIndex?: number }) =>
+      decideIdea(runId!, args.approve, args.ideaIndex),
+    onSuccess: (run) => {
+      qc.setQueryData(['workflow', 'run', run.id], run)
+      qc.invalidateQueries({ queryKey: ['workflow', 'run', run.id] })
+      qc.invalidateQueries({ queryKey: ['workflow', 'runs'] })
+    },
+  })
+}
+
 /** Script gate: duyệt (kèm bản đã sửa) / huỷ. */
 export function useScriptDecision(runId: string | null) {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (args: { approve: boolean; script?: string }) =>
-      decideScript(runId!, args.approve, args.script),
+    mutationFn: (args: { approve: boolean; script?: string; caption?: string; hashtags?: string[] }) =>
+      decideScript(runId!, args.approve, args.script, args.caption, args.hashtags),
     onSuccess: (run) => {
       qc.setQueryData(['workflow', 'run', run.id], run)
       qc.invalidateQueries({ queryKey: ['workflow', 'run', run.id] })
