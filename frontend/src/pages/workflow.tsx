@@ -67,6 +67,7 @@ export default function WorkflowPage() {
         music_track_id: music.music_track_id,
         beat_sync: music.beat_sync,
         music_volume: music.music_volume,
+        publish_mode: publishMode,
       },
       { onError: (e) => toast.error(`Không khởi động được run: ${e.message}`) },
     )
@@ -109,8 +110,8 @@ export default function WorkflowPage() {
       )}
       {agents.data && <PipelineFlow agents={agents.data} steps={run.data?.steps ?? []} />}
 
-      {/* Human gate — hành động khớp chế độ đăng đã chọn ở mục Publisher */}
-      {run.data && <ApprovalGate run={run.data} publishMode={publishMode} />}
+      {/* Human gate — hành động khớp chế độ đăng đã chốt lúc start (đọc run.publish_mode) */}
+      {run.data && <ApprovalGate run={run.data} />}
 
       {/* Run detail */}
       <Card>
