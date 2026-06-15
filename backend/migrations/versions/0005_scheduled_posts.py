@@ -1,7 +1,7 @@
 """scheduled_posts: queue lịch đăng TikTok (calendar + audit + dedup + limit)
 
-Revision ID: 0004_scheduled
-Revises: 0003_music
+Revision ID: 0005_scheduled
+Revises: 0004_chat
 Create Date: 2026-06-14
 
 1 bảng = 4 vai trò (DRY): calendar bài hẹn, audit log mọi lần đăng, dedup theo
@@ -14,8 +14,8 @@ from __future__ import annotations
 
 from alembic import op
 
-revision = "0004_scheduled"
-down_revision = "0003_music"
+revision = "0005_scheduled"
+down_revision = "0004_chat"
 branch_labels = None
 depends_on = None
 

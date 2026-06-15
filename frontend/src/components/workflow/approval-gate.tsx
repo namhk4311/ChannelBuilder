@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { ConfirmDialog } from '@/components/common/confirm-dialog'
-import type { GateDecisionBody, PublishMode, WorkflowRun } from '@/api/workflow'
+import type { GateDecisionBody, WorkflowRun } from '@/api/workflow'
 import { useGateDecision } from '@/hooks/use-workflow'
 
 interface GateOutput {
@@ -27,11 +27,12 @@ function defaultSlotLocal(): string {
 
 /**
  * Human gate — "AI execute, Human decide": pipeline dừng tại đây để duyệt.
- * Hành động khớp `publishMode` đã chọn từ đầu (mục Publisher):
+ * Hành động khớp chế độ đăng đã chốt lúc start (đọc từ `run.publish_mode` — persist
+ * trên run nên không reset khi đổi tab/reload):
  *   review_publish → Duyệt & đăng ngay · schedule → chọn giờ + Duyệt & lên lịch.
  * Luôn có "Từ chối". Preview video thật từ MinIO khi chạy live.
  */
-export function ApprovalGate({ run, publishMode }: { run: WorkflowRun; publishMode: PublishMode }) {
+export function ApprovalGate({ run }: { run: WorkflowRun }) {
   const [confirmReject, setConfirmReject] = useState(false)
   const [slot, setSlot] = useState(defaultSlotLocal)
   const decision = useGateDecision(run.id)
@@ -40,7 +41,7 @@ export function ApprovalGate({ run, publishMode }: { run: WorkflowRun; publishMo
   const gateStep = run.steps.find((s) => s.id === 'human_approval')
   const preview = (gateStep?.output ?? {}) as GateOutput
   const videoUrl = preview.video_url && /^https?:/.test(preview.video_url) ? preview.video_url : null
-  const isSchedule = publishMode === 'schedule'
+  const isSchedule = run.publish_mode === 'schedule'
 
   const submit = (body: GateDecisionBody, okMsg: string) =>
     decision.mutate(body, {

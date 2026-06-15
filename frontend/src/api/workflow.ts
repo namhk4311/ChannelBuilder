@@ -63,6 +63,8 @@ export interface WorkflowRun {
   topic: string | null
   library: string
   subtitles: boolean
+  /** Chế độ đăng chốt lúc start — gate đọc field này để hiện đúng nút (đăng ngay / lên lịch). */
+  publish_mode: PublishMode
   status: RunStatus
   created_at: string
   updated_at: string
@@ -105,6 +107,7 @@ export interface StartRunBody {
   beat_sync?: boolean
   music_volume?: number // 0.05 - 1.0
   review_script?: boolean // dừng gate cho human duyệt/sửa kịch bản (Chat tab)
+  publish_mode?: PublishMode // review_publish (đăng ngay) | schedule (lên lịch)
 }
 
 export const fetchAgents = () => get<{ agents: Agent[] }>('/workflow/agents')

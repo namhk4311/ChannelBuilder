@@ -36,6 +36,9 @@ class StartRunRequest(BaseModel):
                          description="Base gain music — clamped 0.3-0.5 (~-10 tới -6dB)")
     review_script: bool = Field(False,
                          description="Dừng ở gate cho human duyệt/sửa kịch bản trước khi dựng video")
+    publish_mode: str = Field("review_publish",
+                         pattern="^(review_publish|schedule)$",
+                         description="Chế độ đăng: 'review_publish' (duyệt → đăng ngay) | 'schedule' (duyệt → lên lịch)")
 
 
 class ApprovalRequest(BaseModel):
@@ -65,7 +68,8 @@ def start_run(req: StartRunRequest) -> dict:
                             music_track_id=req.music_track_id,
                             beat_sync=req.beat_sync,
                             music_volume=req.music_volume,
-                            review_script=req.review_script)
+                            review_script=req.review_script,
+                            publish_mode=req.publish_mode)
 
 
 @router.get("/runs")

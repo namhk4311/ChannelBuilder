@@ -45,6 +45,7 @@ GREETING = (
 ALLOWED_FIELDS = {
     "topic", "library", "n_ideas", "subtitles",
     "music_track_id", "beat_sync", "music_volume",
+    "publish_mode", "scheduled_for",
 }
 
 
@@ -52,6 +53,9 @@ def _new_spec() -> dict:
     return {
         "topic": None, "library": None, "n_ideas": 5, "subtitles": True,
         "music_track_id": None, "beat_sync": True, "music_volume": 0.3,
+        # Chế độ đăng: 'review_publish' (đăng ngay sau duyệt) | 'schedule' (lên lịch).
+        # scheduled_for = ISO giờ hẹn khi schedule; None → dùng slot mặc định.
+        "publish_mode": "review_publish", "scheduled_for": None,
     }
 
 
@@ -106,6 +110,23 @@ def _options_for_field(field: Optional[str], libs: list[dict], music: list[dict]
     if field == "music_track_id":
         return music
     return []
+
+
+def _resolve_slot(raw: Any):
+    """ISO string giờ hẹn → datetime aware. Thiếu/sai → slot mặc định (9h mai, Asia/Saigon)."""
+    from agents.publisher.scheduler import default_schedule_slot
+    if isinstance(raw, str) and raw.strip():
+        try:
+            from datetime import datetime as _dt
+            from zoneinfo import ZoneInfo
+            from config import SCHEDULE_TZ
+            dt = _dt.fromisoformat(raw.strip().replace("Z", "+00:00"))
+            if dt.tzinfo is None:   # naive → hiểu là giờ địa phương Asia/Saigon
+                dt = dt.replace(tzinfo=ZoneInfo(SCHEDULE_TZ))
+            return dt
+        except Exception:  # noqa: BLE001
+            log.warning("conductor · scheduled_for không parse được (%r) — dùng slot mặc định", raw)
+    return default_schedule_slot()
 
 
 # ----------------------------------------------------------------- LLM call
@@ -233,6 +254,11 @@ def _merge_spec(spec: dict, patch: dict, libs: list[dict], music: list[dict]) ->
                 continue
         if k in ("subtitles", "beat_sync"):
             v = bool(v)
+        if k == "publish_mode" and v not in ("review_publish", "schedule"):
+            log.warning("conductor · bỏ publish_mode không hợp lệ: %r", v)
+            continue
+        if k == "scheduled_for" and v is not None and not isinstance(v, str):
+            continue  # chỉ nhận ISO string; giờ không hợp lệ → fallback slot mặc định
         spec[k] = v
 
 
@@ -399,6 +425,7 @@ def send_message(conv_id: str, text: str) -> Optional[dict]:
                     beat_sync=bool(conv["spec"].get("beat_sync", True)),
                     music_volume=float(conv["spec"].get("music_volume", 0.3)),
                     review_script=True,   # tab Chat: dừng cho user duyệt/sửa kịch bản
+                    publish_mode=conv["spec"].get("publish_mode", "review_publish"),
                 )
                 conv["run_id"] = run["id"]
                 ui_kind = "running"
@@ -418,8 +445,17 @@ def send_message(conv_id: str, text: str) -> Optional[dict]:
         if run_id:
             try:
                 from workflow.runner import decide_gate
-                decide_gate(run_id, approve)
-                log.info("conductor · %s gate %s", conv_id, "APPROVED" if approve else "REJECTED")
+                if not approve:
+                    decide_gate(run_id, decision="reject")
+                    log.info("conductor · %s gate REJECTED", conv_id)
+                elif conv["spec"].get("publish_mode") == "schedule":
+                    # Lên lịch — giờ hẹn từ spec (LLM bắt) hoặc slot mặc định.
+                    slot = _resolve_slot(conv["spec"].get("scheduled_for"))
+                    decide_gate(run_id, decision="schedule", scheduled_for=slot)
+                    log.info("conductor · %s gate SCHEDULED @ %s", conv_id, slot.isoformat())
+                else:
+                    decide_gate(run_id, decision="now")
+                    log.info("conductor · %s gate APPROVED (now)", conv_id)
             except Exception as e:  # noqa: BLE001
                 log.warning("conductor · decide_gate lỗi: %s", e)
         ui_kind = "running"

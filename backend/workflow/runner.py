@@ -72,7 +72,8 @@ def _new_run(topic: str | None, library: str,
              music_track_id: str | None = None,
              beat_sync: bool = True,
              music_volume: float = 0.3,
-             review_script: bool = False) -> dict:
+             review_script: bool = False,
+             publish_mode: str = "review_publish") -> dict:
     run_id = f"run_{next(_SEQ):04d}"
     run = {
         "id": run_id, "topic": topic,
@@ -81,6 +82,9 @@ def _new_run(topic: str | None, library: str,
         "beat_sync": beat_sync,
         "music_volume": music_volume,
         "review_script": review_script,
+        # Chế độ đăng chọn từ đầu — gate đọc lại field này để hiện đúng nút
+        # (đăng ngay vs lên lịch). Persist trên run nên không reset khi UI remount.
+        "publish_mode": publish_mode,
         "status": "running", "created_at": _now(), "updated_at": _now(),
         "gate": {"decision": None, "decided_at": None, "scheduled_for": None},
         "script_gate": {"decision": None, "decided_at": None},
@@ -369,12 +373,14 @@ def start_run(topic: str | None = None, library: str = "vng_insider",
               music_track_id: str | None = None,
               beat_sync: bool = True,
               music_volume: float = 0.3,
-              review_script: bool = False) -> dict:
+              review_script: bool = False,
+              publish_mode: str = "review_publish") -> dict:
     run = _new_run(topic, library, subtitles, n_ideas,
                    music_track_id=music_track_id,
                    beat_sync=beat_sync,
                    music_volume=music_volume,
-                   review_script=review_script)
+                   review_script=review_script,
+                   publish_mode=publish_mode)
 
     def _wrapper() -> None:
         try:
@@ -391,9 +397,9 @@ def start_run(topic: str | None = None, library: str = "vng_insider",
 
     threading.Thread(target=_wrapper, daemon=True,
                      name=f"workflow-{run['id']}").start()
-    log.info("workflow %s started (topic=%r library=%s music=%s beat_sync=%s vol=%.2f)",
+    log.info("workflow %s started (topic=%r library=%s music=%s beat_sync=%s vol=%.2f publish=%s)",
              run["id"], topic, library,
-             music_track_id or "—", beat_sync, music_volume)
+             music_track_id or "—", beat_sync, music_volume, publish_mode)
     return run
 
 
