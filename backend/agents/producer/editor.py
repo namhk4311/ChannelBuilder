@@ -168,8 +168,10 @@ def concat_with_cut_timeline(
 ) -> tuple[Path, float]:
     """Concat n clips theo timeline `cuts` (n+1 timestamps).
 
-    Mỗi clip i được trim từ 0s tới `cuts[i+1] - cuts[i]` sec. Output length =
-    `cuts[-1]` chính xác → KHÔNG cần STEP 4 align downstream.
+    Mỗi clip i fill đúng segment `cuts[i+1] - cuts[i]` sec:
+      • src ≥ target → trim cắt phần thừa.
+      • src < target → loop-fill 1x (`-stream_loop -1` + trim), KHÔNG slow-mo.
+    Output length = `cuts[-1]` chính xác → KHÔNG cần STEP 4 align downstream.
 
     Dùng filter `trim+setpts` (không phải input `-ss/-t`) để giữ độ
     chính xác frame trên timeline filter graph. Vẫn normalize 1080x1920@30fps
@@ -207,7 +209,7 @@ def concat_with_cut_timeline(
     log.debug("concat-cuts: downloaded %d files in %.2fs",
               n, time.monotonic() - t0)
 
-    # 3. Build filter — trim/stretch + scale + pad + fps + concat
+    # 3. Build filter — trim/loop-fill + scale + pad + fps + concat
     #
     # INVARIANT: tổng segment phải = cuts[-1] = voice_duration.
     # Voice là bất khả xâm phạm, video phải khớp 100% — KHÔNG bao giờ cap
@@ -215,37 +217,38 @@ def concat_with_cut_timeline(
     #
     # 2 case xử lý:
     #   • src ≥ target → trim: cắt phần thừa từ cuối clip
-    #   • src < target → setpts stretch: phát chậm clip để fill đủ segment
-    #     factor = target / src > 1 → PTS multiplied → slow-mo playback
+    #   • src < target → LOOP-FILL: lặp clip giữ tốc độ 1x (KHÔNG slow-mo) rồi
+    #     trim đúng target_dur. Input dùng `-stream_loop -1` (lặp vô hạn ở
+    #     decoder, copy pattern music-loop ở pipeline.mux_voice_with_music);
+    #     `trim` chặn độ dài nên loop vô hạn an toàn. Phát 1x → effective fps
+    #     giữ TARGET_FPS, hết giật/slow-mo.
     filters = []
     actual_cuts = [cuts[0]]
-    n_stretched = 0
+    loop_flags = [False] * n          # input nào cần prepend -stream_loop -1
+    n_looped = 0
     for i in range(n):
         target_dur = cuts[i + 1] - cuts[i]
         src_dur = by_id[video_ids[i]]["duration_sec"] or 0
 
-        if src_dur <= 0:
-            # Không có duration metadata — trim trực tiếp, ffmpeg tự handle
-            video_filter = f"trim=0:{target_dur:.3f},setpts=PTS-STARTPTS"
-        elif src_dur >= target_dur:
-            # Source đủ dài → trim phần thừa
+        if src_dur <= 0 or src_dur >= target_dur:
+            # Không có metadata HOẶC source đủ dài → trim trực tiếp tới target.
+            # (src<=0: ffmpeg tự xử; nếu clip thực ngắn hơn target sẽ ra segment
+            #  ngắn — hiếm, vì hầu hết clip có duration_sec trong DB.)
             video_filter = f"trim=0:{target_dur:.3f},setpts=PTS-STARTPTS"
         else:
-            # Source ngắn hơn → stretch (slow-mo) để fill segment
-            factor = target_dur / src_dur
-            n_stretched += 1
-            if factor > 2.5:
-                log.warning("concat-cuts: clip %s stretch %.2fx (%.2fs → %.2fs) — "
-                            "slow-mo có thể nhìn lạ",
-                            video_ids[i][:8], factor, src_dur, target_dur)
+            # Source ngắn hơn → loop-fill 1x: -stream_loop -1 ở input + trim ở
+            # filter. KHÔNG setpts stretch → không slow-mo.
+            loop_flags[i] = True
+            n_looped += 1
+            loop_factor = target_dur / src_dur
+            if loop_factor > 2.5:
+                log.warning("concat-cuts: clip %s loop %.2fx (%.2fs → %.2fs) — "
+                            "hình lặp nhiều lần, cân nhắc multi-clip cùng tag",
+                            video_ids[i][:8], loop_factor, src_dur, target_dur)
             else:
-                log.info("concat-cuts: clip %s stretch %.2fx (%.2fs → %.2fs)",
-                         video_ids[i][:8], factor, src_dur, target_dur)
-            # setpts=factor*(PTS-STARTPTS): reset STARTPTS rồi multiply
-            video_filter = (
-                f"trim=0:{src_dur:.3f},"
-                f"setpts={factor:.4f}*(PTS-STARTPTS)"
-            )
+                log.info("concat-cuts: clip %s loop %.2fx (%.2fs → %.2fs)",
+                         video_ids[i][:8], loop_factor, src_dur, target_dur)
+            video_filter = f"trim=0:{target_dur:.3f},setpts=PTS-STARTPTS"
 
         actual_cuts.append(round(actual_cuts[-1] + target_dur, 3))
         filters.append(
@@ -262,8 +265,12 @@ def concat_with_cut_timeline(
         output_basename += ".mp4"
     output_path = workdir / output_basename
 
+    # `-stream_loop` là INPUT option → phải đặt TRƯỚC `-i` của clip đó. Mỗi clip
+    # là 1 input riêng nên build list động: clip cần loop thì prepend.
     cmd = ["ffmpeg", "-y"]
-    for p in local_paths:
+    for i, p in enumerate(local_paths):
+        if loop_flags[i]:
+            cmd += ["-stream_loop", "-1"]
         cmd += ["-i", str(p)]
     cmd += [
         "-filter_complex", ";".join(filters),
@@ -272,9 +279,9 @@ def concat_with_cut_timeline(
         "-movflags", "+faststart",
         str(output_path),
     ]
-    log.info("concat-cuts: %d clips · target_cuts=%s · actual=%s · stretched=%d",
+    log.info("concat-cuts: %d clips · target_cuts=%s · actual=%s · looped=%d (1x, no slow-mo)",
              n, [round(c, 2) for c in cuts], [round(c, 2) for c in actual_cuts],
-             n_stretched)
+             n_looped)
     log.debug("concat-cuts cmd: %s", " ".join(cmd))
     t_ffmpeg = time.monotonic()
     result = subprocess.run(cmd, capture_output=True, text=True)

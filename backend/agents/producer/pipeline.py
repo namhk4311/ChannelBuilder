@@ -46,6 +46,7 @@ from . import tts_cache
 from .db import pg
 from .editor import TARGET_FPS, concat_to_local, concat_with_cut_timeline
 from .ffprobe import ffprobe_metadata
+from .shotlist import build_fill_plan, compute_sentence_cuts
 from .storage import minio_client
 
 log = logging.getLogger(__name__)
@@ -748,6 +749,7 @@ def produce_from_script(
     music_track_id: Optional[str] = None,
     beat_sync: bool = True,
     music_volume: float = 0.3,
+    shot_list: Optional[list[dict]] = None,
 ) -> dict:
     """
     Pipeline full 6 bước với log step-by-step + summary timing cuối.
@@ -758,6 +760,10 @@ def produce_from_script(
     music_track_id — None = không có nhạc nền (flow cũ); set = mix music.
     beat_sync — chỉ tác động khi có music_track: snap cut vào beat gần nhất.
     music_volume — base gain nhạc nền 0.05-1.0, default 0.3 (~-10dB nền nhẹ).
+    shot_list — shot list của Creative [B] (câu→clip_tag+scene_hint). Có + hợp lệ
+        → path shot-list-driven: cắt theo timing từng câu (hết slow-mo) + chọn
+        clip theo scene_hint (đúng brand). None/không hợp lệ (vd trang Studio,
+        hoặc script bị sửa ở gate) → fallback path cũ (LLM-pick + align_to_voice).
     """
     run_id = uuid.uuid4().hex[:12]
     workdir = Path(tempfile.mkdtemp(prefix=f"produce_{run_id}_"))
@@ -798,19 +804,46 @@ def produce_from_script(
         _step_done(1, "tts", timings["1 tts"], summaries["1 tts"])
         _p(20, f"[1/6] Giọng đọc xong ({voice_duration:.1f}s)")
 
-        # ── STEP 2: LLM clip pick (scope theo library) ──────────────────────
-        _p(22, f"[2/6] LLM đang chọn clip phù hợp kịch bản (library={library})...")
+        # ── STEP 2: Clip selection (shot-list-driven nếu đủ điều kiện, else LLM) ─
+        _p(22, f"[2/6] Đang chọn clip phù hợp kịch bản (library={library})...")
         t = time.monotonic()
         clips_catalog = list_all_clips_for_llm(library)
         if not clips_catalog:
             raise HTTPException(400,
                 f"Library '{library}' không có video nào — upload trước hoặc đổi library.")
-        _step(2, "llm-pick", f"library={library} · catalog={len(clips_catalog)} clip")
-        selected_ids = llm_select_clips(script, voice_duration, clips_catalog)
-        timings["2 llm-pick"] = time.monotonic() - t
-        summaries["2 llm-pick"] = f"{len(selected_ids)} clips picked"
-        _step_done(2, "llm-pick", timings["2 llm-pick"], summaries["2 llm-pick"])
-        _p(45, f"[2/6] LLM chọn xong {len(selected_ids)} clip")
+        _step(2, "pick", f"library={library} · catalog={len(clips_catalog)} clip")
+
+        # Path shot-list-driven (deterministic, KHÔNG đốt quota LLM): cần shot_list
+        # + sentence_cuts (Phase 1, gating script/alignment). build_fill_plan mở mỗi
+        # câu thành nhiều clip phân biệt lấp đủ thời lượng (diệt lặp 1-clip-loop) →
+        # trả (ids, cuts) đã expand. Thiếu/lệch bất kỳ → fallback LLM-pick + align.
+        sentence_cuts = compute_sentence_cuts(shot_list, alignment, voice_duration, script)
+        fill_plan = (build_fill_plan(shot_list, sentence_cuts, clips_catalog)
+                     if (shot_list and sentence_cuts) else None)
+        use_shotlist = fill_plan is not None
+        shotlist_cuts: Optional[list[float]] = None
+
+        if use_shotlist:
+            assembly_path = "shotlist"
+            selected_ids, shotlist_cuts = fill_plan
+            _step(2, "pick", f"path=SHOT-LIST · {len(selected_ids)} clip-segment cho "
+                             f"{len(sentence_cuts) - 1} câu (multi-clip fill, no LLM, no slow-mo)")
+        else:
+            assembly_path = "legacy"
+            if not shot_list:
+                reason = "không có shot_list (vd trang Studio)"
+            elif not sentence_cuts:
+                reason = "không tính được sentence-cuts (script sửa ở gate / thiếu alignment)"
+            else:
+                # build_fill_plan trả None: câu thiếu clip khớp tag, hoặc segment lỗi.
+                reason = "không dựng được fill-plan từ shot_list (câu thiếu clip / timing lỗi)"
+            _step(2, "pick", f"path=LEGACY ({reason}) → LLM-pick + align")
+            selected_ids = llm_select_clips(script, voice_duration, clips_catalog)
+
+        timings["2 pick"] = time.monotonic() - t
+        summaries["2 pick"] = f"{assembly_path} · {len(selected_ids)} clips"
+        _step_done(2, "pick", timings["2 pick"], summaries["2 pick"])
+        _p(45, f"[2/6] Chọn xong {len(selected_ids)} clip (path={assembly_path})")
 
         # ── STEP 2b: Music + beat snap (nếu user chọn nhạc nền) ─────────────
         beat_cuts: Optional[list[float]] = None
@@ -840,7 +873,12 @@ def produce_from_script(
                           f"⤴ track ngắn hơn voice ({music_meta['duration_sec']:.1f}s "
                           f"< {voice_duration:.1f}s) → loop x{n_loops} ở ffmpeg "
                           f"+ extend beats để snap đủ phủ window")
-                if beat_sync:
+                if beat_sync and use_shotlist:
+                    # Sentence-cuts thắng beat-cuts: visual bám LỜI quan trọng hơn
+                    # bám beat. Nhạc vẫn được mix (ducking) ở STEP 5, chỉ bỏ snap cut.
+                    _step(2, "beat-sync",
+                          "skip snap — shot-list sentence-cuts ưu tiên (nhạc vẫn mix ở mux)")
+                elif beat_sync:
                     extended = extend_beats_for_loop(
                         music_meta["beat_times"],
                         music_meta["duration_sec"],
@@ -856,27 +894,34 @@ def produce_from_script(
                           f"→ {len(beat_cuts) - 1} cut snapped: "
                           f"{[round(c, 2) for c in beat_cuts]}")
 
-        # ── STEP 3: Concat (variant theo beat_cuts nếu có) ──────────────────
-        if beat_cuts is not None:
-            _p(47, f"[3/6] Ghép {len(selected_ids)} clip theo beat ({len(beat_cuts)-1} cuts)...")
+        # ── STEP 3: Concat (cut-timeline nếu shot-list/beat-sync, else legacy) ─
+        # cut-timeline trim/loop-fill đúng từng segment → output = voice_duration
+        # CHÍNH XÁC → SKIP STEP 4 align (hết global slow-mo). Sentence-cuts (shot-
+        # list) ưu tiên hơn beat-cuts; cả 2 cùng dùng concat_with_cut_timeline.
+        cut_timeline = shotlist_cuts if use_shotlist else beat_cuts
+        if cut_timeline is not None:
+            label = "SHOT-LIST sentence-cuts" if use_shotlist else "BEAT-SYNC"
+            _p(47, f"[3/6] Ghép {len(selected_ids)} clip theo {label} ({len(cut_timeline)-1} cuts)...")
             t = time.monotonic()
-            _step(3, "concat", f"start · BEAT-SYNC · {len(selected_ids)} clips")
+            _step(3, "concat", f"start · {label} · {len(selected_ids)} clips")
             silent_path, silent_duration = concat_with_cut_timeline(
-                selected_ids, beat_cuts, workdir=workdir,
+                selected_ids, cut_timeline, workdir=workdir,
             )
             timings["3 concat"] = time.monotonic() - t
-            summaries["3 concat"] = f"beat-sync {silent_duration:.2f}s = voice"
+            summaries["3 concat"] = f"{label} {silent_duration:.2f}s = voice"
             _step_done(3, "concat", timings["3 concat"], summaries["3 concat"])
-            _p(80, f"[3/6] Beat-sync xong ({silent_duration:.1f}s)")
-            # Beat-sync đã trim đúng voice_duration → SKIP step 4 align
+            _p(80, f"[3/6] Ghép theo timeline xong ({silent_duration:.1f}s)")
+            # cut-timeline đã trim đúng voice_duration → SKIP step 4 align
             timings["4 align"] = 0.0
-            summaries["4 align"] = "skip (beat-sync exact)"
+            summaries["4 align"] = f"skip ({'shot-list' if use_shotlist else 'beat-sync'})"
             align_meta = {
-                "action": "skip-beat-sync",
+                "action": "skip-shotlist" if use_shotlist else "skip-beat-sync",
                 "target_sec": round(voice_duration, 3),
-                "beat_cuts": [round(c, 3) for c in beat_cuts],
+                "cuts": [round(c, 3) for c in cut_timeline],
             }
-            _step(4, "align", "skip — beat-sync đã lock duration = voice")
+            _step(4, "align",
+                  f"skip — {'shot-list sentence-cuts' if use_shotlist else 'beat-sync'} "
+                  f"đã lock duration = voice")
         else:
             _p(47, f"[3/6] Đang ghép {len(selected_ids)} clip (ffmpeg)...")
             t = time.monotonic()
@@ -963,6 +1008,7 @@ def produce_from_script(
             "silent_video_duration_sec": round(silent_duration, 2),
             "final_duration_sec":        round(final_duration, 2),
             "selected_clips":            selected_ids,
+            "assembly_path":             assembly_path,
             "alignment":                 align_meta,
             "subtitles":         overlays is not None,
             "subtitle_chunks":   len(overlays) if overlays else 0,

@@ -28,13 +28,15 @@ GreenNode Claw-a-thon (7 ngày).
                                     ▼
                    ┌──────────────────────────────────────┐
                    │  [C] Producer                        │
-                   │  1. TTS giọng đọc (ElevenLabs eleven_v3)│
-                   │  2. LLM pick clip (deepseek-flash)   │
-                   │     ↳ scope: WHERE library = ?       │
-                   │  3. ffmpeg concat normalize          │
-                   │  4. align (trim hoặc setpts)         │
-                   │  5. mux voice + phụ đề (overlay PNG) │
-                   │  6. upload MinIO outputs             │
+                   │  1. TTS giọng đọc (ElevenLabs)       │
+                   │  2a. Shot-list path (Creative):      │
+                   │      • Sentence-timed cuts (no LLM)  │
+                   │      • Deterministic clip pick       │
+                   │  2b. Legacy path (fallback):         │
+                   │      • LLM pick clip (deepseek-flash)│
+                   │  3. ffmpeg concat (loop-fill clips)  │
+                   │  4. mux voice + phụ đề (overlay PNG)│
+                   │  5. upload MinIO outputs             │
                    └────────────────┬─────────────────────┘
                                     │ 3 link MinIO (silent / voice / final)
                                     ▼
@@ -103,8 +105,9 @@ elevenlabs/
 │   │   ├── scheduler.py       #   APScheduler tick (60s interval)
 │   │   └── schedule_router.py #   POST /api/publisher/schedule + calendar
 │   └── producer/              # [C] Producer (vốn là video_editor/)
-│       ├── pipeline.py        #   POST /api/produce — 6-step orchestrator
-│       ├── editor.py          #   POST /api/concat (ffmpeg helper)
+│       ├── pipeline.py        #   POST /api/produce — 6-step dual-path orchestrator
+│       ├── editor.py          #   POST /api/concat (ffmpeg helper + loop-fill)
+│       ├── shotlist.py        #   Sentence-cut deterministic clip picker (NEW)
 │       ├── clips.py           #   POST/GET/PATCH/DELETE /api/videos
 │       ├── categories.py      #   /api/categories (scope theo library)
 │       ├── libraries.py       #   /api/libraries
@@ -226,6 +229,23 @@ Lifespan tự chạy:
 - Table `scheduled_posts` (`id, video_path, caption, script, text_hook, status, content_hash, scheduled_for, published_at, error, run_id`)
 - APScheduler @ `SCHEDULE_TICK_SECONDS` interval, lúc server start
 - Config keys mới: `MAX_POSTS_PER_DAY`, `SCHEDULE_TZ`, `SCHEDULE_DEFAULT_HOUR`, `SCHEDULE_TICK_ENABLED`
+
+---
+
+## Producer: Shot-List vs Legacy Paths
+
+**Shot-List Path** (NEW — 2026-06-15): Khi Creative [B] trả về `shot_list` (câu → `clip_tag` + `scene_hint`):
+- `produce_from_script(shot_list=...)` → deterministic clip pick (no LLM), khớp `scene_hint`↔`description` (diệt Phúc Long↔Starbucks)
+- Cắt timeline theo sentence từ ElevenLabs alignment (chính xác 0.1s)
+- **Multi-clip fill**: câu dài lấp bằng nhiều clip phân biệt (≥1.5s/clip, ≤4 clip/câu) thay vì loop 1 clip → giảm lặp hình
+- Loop-fill 1x chỉ ở phần dư (khi bucket cạn) thay vì slow-mo → fixes tụt fps / frame rate errors
+
+**Legacy Path** (Fallback): Không có `shot_list` hoặc không hợp lệ:
+- Dùng LLM (deepseek-flash) pick clip từ library
+- Cách cũ unchanged
+- Dùng cho Studio `/api/produce` (Studio không gửi `shot_list`)
+
+Workflow orchestrator sẽ tự chọn path dựa vào input; không cần config.
 
 ---
 

@@ -289,12 +289,17 @@ def _run_pipeline(run: dict) -> None:  # noqa: PLR0915 — pipeline tuần tự,
 
     try:
         from agents.producer.pipeline import produce_from_script
+        # Truyền shot_list của Creative xuống Producer (Fix 0): bật path shot-list-
+        # driven (cắt theo câu + chọn clip theo scene_hint). Nếu script bị sửa ở
+        # script gate, package["script"] đổi nhưng shot_list không → gating trong
+        # compute_sentence_cuts tự fallback path cũ. An toàn.
         produce_result = produce_from_script(
             package.get("script") or "", progress_cb=cb,
             subtitles=run["subtitles"], library=run["library"],
             music_track_id=run["music_track_id"],
             beat_sync=run["beat_sync"],
-            music_volume=run["music_volume"])
+            music_volume=run["music_volume"],
+            shot_list=package.get("shot_list"))
     except Exception as e:  # noqa: BLE001 — producer raise HTTPException/Exception
         return _fail_run(run, s, f"Producer lỗi: {e}")
     s["progress"] = 100
