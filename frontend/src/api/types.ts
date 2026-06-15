@@ -34,6 +34,8 @@ export interface Clip {
   object_name: string
   size_bytes: number
   uploaded_at: string | null
+  /** Presigned GET URL để xem lại clip gốc trong browser (hết hạn sau ~6h). */
+  preview_url: string | null
 }
 
 /** 1 idea từ POST /api/creative/ideas — LLM output, field có thể thiếu. */

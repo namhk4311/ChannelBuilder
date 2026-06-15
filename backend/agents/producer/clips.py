@@ -5,6 +5,7 @@ import logging
 import os
 import tempfile
 import uuid
+from datetime import timedelta
 from pathlib import Path
 from typing import Optional
 
@@ -20,6 +21,21 @@ from .storage import minio_client
 
 log = logging.getLogger(__name__)
 router = APIRouter(tags=["clips"])
+
+# Bucket `clips` (sources) là private (chỉ outputs/music public-read) — nên dùng
+# presigned URL có hạn để preview clip gốc trong browser mà không mở bucket ra public.
+_PREVIEW_TTL = timedelta(hours=6)
+
+
+def _preview_url(object_name: str) -> Optional[str]:
+    """Presigned GET URL để xem clip gốc trong browser (không cần auth, hết hạn sau TTL)."""
+    if not object_name:
+        return None
+    try:
+        return minio_client.presigned_get_object(BUCKET_SOURCES, object_name, expires=_PREVIEW_TTL)
+    except S3Error as e:
+        log.warning("presign preview lỗi object=%s: %s", object_name, e)
+        return None
 
 
 # ─── Upload ──────────────────────────────────────────────────────────────────
@@ -120,6 +136,7 @@ def list_videos(
     for r in rows:
         if r.get("uploaded_at"):
             r["uploaded_at"] = r["uploaded_at"].isoformat()
+        r["preview_url"] = _preview_url(r.get("object_name"))
     return rows
 
 

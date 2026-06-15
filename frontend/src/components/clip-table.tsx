@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Pencil, Trash2 } from 'lucide-react'
+import { Pencil, Play, Trash2 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -23,6 +23,7 @@ import { toast } from 'sonner'
 import type { Clip } from '@/api/types'
 import { useDeleteVideo } from '@/hooks/use-videos'
 import { ClipTablePagination } from '@/components/clip-table-pagination'
+import { ClipPreviewDialog } from '@/components/clip-preview-dialog'
 import { EditClipDialog } from '@/components/edit-clip-dialog'
 
 // A23c — đúng 3 lựa chọn page size
@@ -39,6 +40,7 @@ export function ClipTable({ library, clips }: ClipTableProps) {
   const [pageSize, setPageSize] = useState<number>(PAGE_SIZES[0])
   const [editing, setEditing] = useState<Clip | null>(null)
   const [deleting, setDeleting] = useState<Clip | null>(null)
+  const [previewing, setPreviewing] = useState<Clip | null>(null)
   const remove = useDeleteVideo(library)
 
   const pageCount = Math.max(1, Math.ceil(clips.length / pageSize))
@@ -59,6 +61,15 @@ export function ClipTable({ library, clips }: ClipTableProps) {
 
   const actions = (clip: Clip) => (
     <div className="flex justify-end gap-1">
+      <Button
+        variant="ghost"
+        size="icon-sm"
+        aria-label="Xem lại clip"
+        title="Xem lại clip"
+        onClick={() => setPreviewing(clip)}
+      >
+        <Play />
+      </Button>
       <Button variant="ghost" size="icon-sm" aria-label="Sửa clip" onClick={() => setEditing(clip)}>
         <Pencil />
       </Button>
@@ -121,7 +132,14 @@ export function ClipTable({ library, clips }: ClipTableProps) {
             {rows.map((clip) => (
               <TableRow key={clip.id}>
                 <TableCell className="max-w-64">
-                  <div className="font-medium text-foreground truncate">{clip.file}</div>
+                  <button
+                    type="button"
+                    onClick={() => setPreviewing(clip)}
+                    className="block w-full truncate text-left font-medium text-foreground hover:text-primary hover:underline"
+                    title="Xem lại clip"
+                  >
+                    {clip.file}
+                  </button>
                   <div className="text-xs text-muted-foreground truncate">
                     {clip.description || clip.id}
                   </div>
@@ -152,7 +170,13 @@ export function ClipTable({ library, clips }: ClipTableProps) {
             <li key={clip.id} className="p-4">
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0 space-y-1">
-                  <div className="font-medium text-foreground truncate">{clip.file}</div>
+                  <button
+                    type="button"
+                    onClick={() => setPreviewing(clip)}
+                    className="block w-full truncate text-left font-medium text-foreground"
+                  >
+                    {clip.file}
+                  </button>
                   <div className="text-sm text-muted-foreground">
                     {clip.duration_sec.toFixed(1)}s · {clip.mood || 'chưa có mood'} ·{' '}
                     {clip.has_people ? 'có người' : 'không người'}
@@ -187,6 +211,7 @@ export function ClipTable({ library, clips }: ClipTableProps) {
         </div>
       </Card>
 
+      <ClipPreviewDialog clip={previewing} onOpenChange={(open) => !open && setPreviewing(null)} />
       <EditClipDialog
         library={library}
         clip={editing}
