@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Optional
 
 import librosa
+import numpy as np
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from psycopg.types.json import Jsonb
 
@@ -36,10 +37,13 @@ def detect_beats(path: str) -> tuple[float, list[float], float]:
     y, sr = librosa.load(path, sr=None, mono=True)
     duration = float(len(y) / sr)
     tempo, beat_frames = librosa.beat.beat_track(y=y, sr=sr)
+    # librosa >= 0.10 trả tempo dạng np.ndarray shape (1,) → ép về scalar an toàn
+    # (np.atleast_1d xử lý cả scalar, 0-d và 1-d array).
+    bpm = float(np.atleast_1d(tempo)[0])
     beat_times = librosa.frames_to_time(beat_frames, sr=sr).tolist()
     log.info("beats · bpm=%.1f n=%d duration=%.2fs",
-             float(tempo), len(beat_times), duration)
-    return float(tempo), beat_times, duration
+             bpm, len(beat_times), duration)
+    return bpm, beat_times, duration
 
 
 def beats_in_window(beat_times: list[float], end: float,

@@ -36,6 +36,7 @@ BRAND_GUIDE = """\
 - Người xem: SV năm cuối, fresher, người trẻ mê tech, tò mò "làm ở VNG ra sao".
 - Lời hứa kênh: xem → thấy đời sống THẬT ở VNG + biết cách lọt vào.
 - Nhân viên VNG luôn gọi là "Starter" — dùng từ này tạo chất insider.
+- Người dẫn xưng "chồng" (chất hài "chồng kể cho vợ nghe") — LUÔN viết đầy đủ chữ "chồng", TUYỆT ĐỐI không viết tắt "ck" (lời thoại đưa thẳng TTS, "ck" bị đọc sai thành "xê-ca"). Từ "vợ" dùng tiết chế — chỉ "mấy con vợ / mấy vợ" 1 lần ở mở đầu hoặc CTA, KHÔNG rải khắp câu (chi tiết ở TONE).
 - 3 mảng nội dung (pillar):
   1. campus — Không gian & tiện ích VNG Campus (gym, café, canteen, không gian xanh/mở)
   2. tuyendung — Cách để vào VNG (tố chất: dám đón nhận thử thách, năng động, đam mê công nghệ, không ngại khó, sẵn sàng chia sẻ)
@@ -91,6 +92,8 @@ Quy tắc giọng:
 - Câu ngắn, nhịp nhanh, có punchline.
 - Chèn 1 chi tiết bất ngờ THẬT để người xem "ồ".
 - Chốt bằng 1 câu đọng hoặc CTA nhẹ (follow để xem tiếp...).
+- Xưng hô (CHỐT): người dẫn xưng "chồng" — viết ĐẦY ĐỦ chữ "chồng", TUYỆT ĐỐI không viết tắt "ck" (voiceover đưa thẳng TTS, "ck" sẽ bị đọc thành "xê-ca"). HẠN CHẾ từ "vợ" — chỉ "mấy con vợ / mấy vợ" 1 lần ở mở đầu HOẶC CTA (vd "để chồng kể cho mấy con vợ nghe nha"), KHÔNG rải khắp câu.
+- Thán từ duyên cho tự nhiên: "chời ơi", "nha", "à nha", "nói thật nha". Vẫn văn minh, lịch sự.
 
 Pattern text hook tham khảo (10+ mẫu):
 "Công ty gì mà tan ca xong còn lười về nhà?" · "Muốn vào VNG mà sợ việc khó? Nghe nè." · "Văn phòng không vách ngăn — sướng hay khổ?" · "Vào VNG không phải chỉ có làm game đâu." · "Văn phòng mà có cả thư viện riêng, tin không?" · "Sự thật về văn hóa 'đón nhận thử thách' ở VNG." · "Tố chất số 1 để lọt vào VNG, không phải điểm GPA." · "Một vòng VNG Campus trong 50 giây." · "Canteen, Starbucks, Phúc Long — ăn ở đâu trước?" · "Đi làm mà có phòng gym ngay tầng dưới thì sao?" · "Đây là lý do người trẻ mê vào VNG." · "Phòng họp ở VNG đặt tên theo... thành phố."
@@ -122,28 +125,28 @@ FEW_SHOTS = """\
 ## 5 KỊCH BẢN MẪU CHUẨN (học cấu trúc + giọng + cách gán clip_tag)
 
 ### MẪU 1 — pillar campus (tiện ích)
-text_hook: "Công ty gì mà tan ca xong còn lười về nhà?"
-voiceover: "Công ty gì mà tan ca xong còn lười về nhà? Đây, VNG Campus. Có phòng gym để xả hơi sau giờ làm. Khát thì ghé Starbucks hay Phúc Long ngay trong tòa, ngồi ngắm hồ cá cho thư giãn. Đói thì xuống canteen. Mệt nữa thì ra sân vườn hít thở chút cây xanh. Nói thật, ở đây tiện tới mức về nhà thấy hơi... thiếu thiếu. Follow để mai mình dẫn đi xem tiếp nha."
+text_hook: "Chời ơi, công ty gì mà tan ca xong chồng còn lười về nhà?"
+voiceover: "Chời ơi, công ty gì mà tan ca xong chồng còn lười về nhà? Để chồng kể cho mấy con vợ nghe nha. Đây, VNG Campus. Có phòng gym xả hơi sau giờ làm. Khát thì ghé Starbucks hay Phúc Long ngay trong tòa, ngồi ngắm hồ cá cho thư giãn. Đói thì xuống canteen. Mệt nữa thì ra sân vườn hít chút cây xanh. Nói thật nha, tiện tới mức về nhà còn thấy hơi... thiếu thiếu. Follow đi rồi mai chồng dẫn đi xem tiếp nha."
 shot list: hook→campusngoaicanh (cổng chính) | gym→gym | café→canteencafe (Phúc Long hồ cá) | canteen→canteencafe (cantin) | cây xanh→cayxanhthugian (sân vườn) | chốt→campusngoaicanh (ban công nhìn cảng)
 
 ### MẪU 2 — pillar tuyendung (tố chất "đón nhận thử thách")
-text_hook: "Muốn vào VNG mà sợ việc khó? Nghe nè."
-voiceover: "Muốn vào VNG mà sợ việc khó? Hơi mệt à nha. Vì văn hóa ở đây là 'đón nhận thử thách' — càng bài toán khó càng được giao. Nhìn cái slogan treo tường kìa: 'pioneer that never stops pioneering' — tức là không bao giờ ngừng đi đầu. VNG tin người trẻ giỏi cần chỗ để giải bài khó, không phải chỗ ngồi yên. Nên nếu bạn dám thử, dám sai — đây đúng sân của bạn."
+text_hook: "Muốn vào VNG mà sợ việc khó? Để chồng nói nghe nè."
+voiceover: "Muốn vào VNG mà sợ việc khó? Để chồng nói cho mấy con vợ nghe nè. Hơi mệt à nha. Vì văn hóa ở đây là 'đón nhận thử thách' — càng bài toán khó càng được giao. Nhìn cái slogan treo tường kìa: 'pioneer that never stops pioneering' — tức là không bao giờ ngừng đi đầu. VNG tin người trẻ giỏi cần chỗ giải bài khó, chứ không phải chỗ ngồi yên. Nên ai dám thử, dám sai — đây đúng sân rồi đó."
 shot list: hook→goclamviec (khu làm việc mở) | "đón nhận thử thách"→khonggianmo (atrium thông tầng) | slogan→buzones (tivi slogan VNG) | chốt→khonggianmo (khu trưng bày lịch sử)
 
 ### MẪU 3 — pillar campus (không gian mở)
-text_hook: "Văn phòng mà có cả thư viện riêng, tin không?"
-voiceover: "Văn phòng mà có cả thư viện riêng, tin không? Ở VNG Campus có thật. Sảnh thông tầng mấy tầng, có cả beanbag để ngả lưng. Phòng họp vách kính đặt tên theo mấy thành phố lớn nghe cũng sang. Khu làm việc mở, không vách ngăn ngột ngạt. Làm việc trong một nơi thoáng như vầy, đầu óc nó cũng nhẹ hơn thật."
+text_hook: "Chời ơi, văn phòng mà có cả thư viện riêng, tin không?"
+voiceover: "Chời ơi, văn phòng mà có cả thư viện riêng, tin không? Ở VNG Campus có thật nha. Để chồng dẫn đi coi: sảnh thông tầng mấy tầng, có cả beanbag để ngả lưng. Phòng họp vách kính đặt tên theo mấy thành phố lớn, nghe sang phết. Khu làm việc mở, không vách ngăn ngột ngạt. Làm trong chỗ thoáng vầy, đầu óc nhẹ hẳn luôn."
 shot list: hook→khonggianmo (thư viện) | sảnh thông tầng→khonggianmo (atrium beanbag) | phòng họp→hopteam (phòng họp kính) | khu làm việc→goclamviec (khu làm việc mở)
 
 ### MẪU 4 — pillar bu (đa dạng cơ hội)
-text_hook: "Vào VNG không phải chỉ có làm game đâu."
-voiceover: "Vào VNG không phải chỉ có làm game đâu — dù VNGGames đúng là khét tiếng, logo to đùng ngay khu làm việc. Đi vài bước là tới khu Zalo, nơi làm ra cái app mà gần như ai cũng có trong máy. Một nhà mà nhiều sân chơi: game, nền tảng, công nghệ. Vào đây rồi tha hồ chọn sân của mình."
+text_hook: "Vào VNG không phải chỉ có làm game đâu nha."
+voiceover: "Vào VNG không phải chỉ có làm game đâu nha — để chồng kể mấy con vợ nghe. VNGGames thì đúng là khét tiếng, logo to đùng ngay khu làm việc. Mà đi vài bước là tới khu Zalo, nơi làm ra cái app gần như ai cũng có trong máy. Một nhà mà nhiều sân chơi: game, nền tảng, công nghệ. Vào đây rồi tha hồ chọn sân của mình."
 shot list: hook→buzones (logo VNGGames) | "khét tiếng"→buzones (logo VNGGames) | Zalo→buzones (khu Zalo / sảnh Zalo) | chốt→buzones (banner Zalo)
 
 ### MẪU 5 — pillar campus (đời thường, tour)
-text_hook: "Đi một vòng VNG Campus trong 50 giây."
-voiceover: "Đi một vòng VNG Campus trong 50 giây nha. Bắt đầu từ cổng chính, đi qua đài phun nước. Vào trong là sảnh lớn, nơi tổ chức cả sự kiện Tết có ca sĩ hát áo dài luôn. Ghé pantry làm ly cà phê máy, vớ thêm hộp salad. Rồi tạt ra hành lang xanh mướt cây cối. Một vòng thôi mà thấy đã. Follow xem tập sau nha."
+text_hook: "Để chồng dẫn đi một vòng VNG Campus trong 50 giây."
+voiceover: "Để chồng dẫn mấy con vợ đi một vòng VNG Campus trong 50 giây nha. Bắt đầu từ cổng chính, đi qua đài phun nước. Vào trong là sảnh lớn, nơi tổ chức cả sự kiện Tết có ca sĩ áo dài hát luôn. Ghé pantry làm ly cà phê máy, vớ thêm hộp salad. Rồi tạt ra hành lang xanh mướt cây cối. Một vòng thôi mà thấy đã. Follow đi rồi mai chồng dẫn đi xem tiếp nha."
 shot list: hook→campusngoaicanh (cổng chính) | đài phun nước→campusngoaicanh | sảnh→khonggianmo (sảnh lớn) | sự kiện Tết→sukienclb (Tết sảnh lớn) | pantry→canteencafe (pantry máy pha + salad) | hành lang xanh→cayxanhthugian (hành lang xanh)
 """
 

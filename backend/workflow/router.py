@@ -9,6 +9,7 @@ POST /api/workflow/runs/{run_id}/approval — human gate: duyệt / từ chối 
 from __future__ import annotations
 
 import logging
+from datetime import datetime
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException
@@ -38,7 +39,12 @@ class StartRunRequest(BaseModel):
 
 
 class ApprovalRequest(BaseModel):
-    approve: bool
+    # decision = lựa chọn mới (3 nhánh). approve = field cũ (backward-compat).
+    decision: Optional[str] = Field(
+        None, description="'now' (đăng ngay) | 'schedule' (lên lịch) | 'reject'")
+    scheduled_for: Optional[datetime] = Field(
+        None, description="Giờ hẹn ISO UTC — chỉ dùng khi decision='schedule'")
+    approve: Optional[bool] = Field(None, description="[deprecated] True→now, False→reject")
 
 
 class ScriptDecisionRequest(BaseModel):
@@ -77,10 +83,11 @@ def get_run(run_id: str) -> dict:
 
 @router.post("/runs/{run_id}/approval")
 def decide_gate(run_id: str, req: ApprovalRequest) -> dict:
-    run = runner.decide_gate(run_id, req.approve)
+    run = runner.decide_gate(run_id, decision=req.decision,
+                             scheduled_for=req.scheduled_for, approve=req.approve)
     if run is None:
         raise HTTPException(404, "Run không tồn tại (server restart?)")
-    log.info("workflow %s · gate %s", run_id, "APPROVED" if req.approve else "REJECTED")
+    log.info("workflow %s · gate decision=%s", run_id, run["gate"]["decision"])
     return run
 
 

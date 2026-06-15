@@ -44,7 +44,7 @@ from config import (
 
 from . import tts_cache
 from .db import pg
-from .editor import concat_to_local, concat_with_cut_timeline
+from .editor import TARGET_FPS, concat_to_local, concat_with_cut_timeline
 from .ffprobe import ffprobe_metadata
 from .storage import minio_client
 
@@ -549,9 +549,13 @@ def align_to_voice(
           f"decision: SLOWDOWN (voice dài hơn video {-delta:.2f}s) · "
           f"setpts factor={factor:.4f} (video {video_duration:.2f}s → {voice_duration:.2f}s)")
     out = workdir / "aligned_speed.mp4"
+    # setpts stretch timestamps → frame rate biến thành VFR/non-standard. PHẢI
+    # resample về CFR TARGET_FPS (filter `fps` + `-r`) nếu không TikTok từ chối
+    # với `frame_rate_check_failed` (cần constant frame rate hợp lệ).
     cmd = [
         "ffmpeg", "-y", "-i", str(video_path),
-        "-filter:v", f"setpts=PTS/{factor:.6f}",
+        "-filter:v", f"setpts=PTS/{factor:.6f},fps={TARGET_FPS}",
+        "-r", str(TARGET_FPS),
         "-an",
         str(out),
     ]
@@ -608,9 +612,11 @@ def mux_voice(video_path: Path, voice_path: Path, workdir: Path,
             "-filter_complex", ";".join(parts),
             "-map", f"[{prev}]",
             "-c:v", "libx264", "-preset", "fast", "-crf", "23",
+            "-r", str(TARGET_FPS),  # pin CFR → TikTok frame_rate_check OK
         ]
     else:
         _step(5, "mux", "no subs → video copy stream")
+        # copy giữ nguyên CFR của video đã align (align luôn xuất CFR TARGET_FPS).
         cmd += ["-map", "0:v:0", "-c:v", "copy"]
 
     cmd += [
@@ -701,6 +707,7 @@ def mux_voice_with_music(
         "-map", video_map,
         "-map", "[aout]",
         "-c:v", "libx264", "-preset", "fast", "-crf", "23",
+        "-r", str(TARGET_FPS),  # pin CFR → TikTok frame_rate_check OK
         "-c:a", "aac", "-b:a", "192k",
         "-shortest",
         "-movflags", "+faststart",

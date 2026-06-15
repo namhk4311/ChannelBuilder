@@ -21,13 +21,10 @@ from __future__ import annotations
 
 import itertools
 import logging
-import tempfile
 import threading
-import time
-import urllib.request
 from datetime import datetime, timezone
-from pathlib import Path
 from typing import Any
+from zoneinfo import ZoneInfo
 
 log = logging.getLogger(__name__)
 
@@ -61,6 +58,15 @@ def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def _fmt_local(dt: datetime) -> str:
+    """datetime aware → 'HH:MM dd/MM' theo Asia/Saigon cho summary UI."""
+    from config import SCHEDULE_TZ
+    try:
+        return dt.astimezone(ZoneInfo(SCHEDULE_TZ)).strftime("%H:%M %d/%m")
+    except Exception:  # noqa: BLE001
+        return str(dt)
+
+
 def _new_run(topic: str | None, library: str,
              subtitles: bool, n_ideas: int,
              music_track_id: str | None = None,
@@ -76,7 +82,7 @@ def _new_run(topic: str | None, library: str,
         "music_volume": music_volume,
         "review_script": review_script,
         "status": "running", "created_at": _now(), "updated_at": _now(),
-        "gate": {"decision": None, "decided_at": None},
+        "gate": {"decision": None, "decided_at": None, "scheduled_for": None},
         "script_gate": {"decision": None, "decided_at": None},
         "script_override": None,
         "steps": [
@@ -132,14 +138,6 @@ def _fail_run(run: dict, s: dict, error: str, output: Any = None) -> None:
             other["status"] = "skipped"
     run["status"] = "failed"
     run["updated_at"] = _now()
-
-
-def _download_to_tmp(url: str) -> str:
-    """Tải video final từ MinIO outputs về file tạm cho publish_video (cần local path)."""
-    fd, path = tempfile.mkstemp(suffix=".mp4", prefix="workflow_publish_")
-    Path(path).unlink(missing_ok=True)
-    urllib.request.urlretrieve(url, path)  # noqa: S310 — URL nội bộ MinIO outputs
-    return path
 
 
 def _run_pipeline(run: dict) -> None:  # noqa: PLR0915 — pipeline tuần tự, đọc từ trên xuống
@@ -269,7 +267,14 @@ def _run_pipeline(run: dict) -> None:  # noqa: PLR0915 — pipeline tuần tự,
     s["summary"] = "Pipeline tạm dừng — chờ human duyệt trước khi đăng"
     run["updated_at"] = _now()
     _GATES[run["id"]].wait()
-    if run["gate"]["decision"] != "approved":
+    decision = run["gate"]["decision"]
+    snapshot = {"run_id": run["id"], "library": run["library"],
+                "video_object": video_url, "caption": full_caption,
+                "script": package.get("script") or "",
+                "text_hook": package.get("text_hook")}
+
+    # ---- 5a. Từ chối → dừng, không đăng
+    if decision == "reject":
         _finish_step(run, s, "rejected", s["output"], "Human từ chối đăng video")
         for other in run["steps"]:
             if other["status"] == "pending":
@@ -277,27 +282,58 @@ def _run_pipeline(run: dict) -> None:  # noqa: PLR0915 — pipeline tuần tự,
         run["status"] = "rejected"
         run["updated_at"] = _now()
         return None
-    run["status"] = "running"
-    _finish_step(run, s, "ok", s["output"], "Human đã duyệt — tiếp tục đăng")
 
-    # ---- 6. [D] publish_video
+    # ---- 5b. Lên lịch → vào queue scheduled_posts, run hoàn tất (tick tự đăng tới giờ)
+    if decision == "schedule":
+        _finish_step(run, s, "ok", s["output"], "Human chọn lên lịch đăng")
+        s = _start_step(run, "publish_video")
+        if not video_url:
+            return _fail_run(run, s, "Producer không trả output_url — không có video để lên lịch")
+        from agents.publisher import scheduled_posts
+        from agents.publisher.scheduler import default_schedule_slot
+        scheduled_for = run["gate"].get("scheduled_for") or default_schedule_slot()
+        try:
+            row = scheduled_posts.insert(snapshot, trigger="scheduled",
+                                         actor="human:ui", scheduled_for=scheduled_for)
+        except Exception as e:  # noqa: BLE001
+            return _fail_run(run, s, f"Không lưu được lịch: {e}")
+        _finish_step(run, s, "scheduled", {"post": row},
+                     f"Đã lên lịch {_fmt_local(scheduled_for)} • tick tự đăng tới giờ",
+                     data_source="real")
+        s = _start_step(run, "get_video_metrics")
+        _finish_step(run, s, "skipped", None,
+                     "Bài đang chờ lịch — kéo metric sau khi đăng")
+        run["status"] = "completed"
+        run["updated_at"] = _now()
+        return None
+
+    # ---- decision == "now" → đăng ngay qua publish_service (đi qua đủ 4 phanh)
+    run["status"] = "running"
+    _finish_step(run, s, "ok", s["output"], "Human đã duyệt — đăng ngay")
+
+    # ---- 6. [D] publish_video (on-demand)
     s = _start_step(run, "publish_video")
     if not video_url:
         return _fail_run(run, s, "Producer không trả output_url — không có video để đăng")
-    try:
-        local_path = _download_to_tmp(video_url)
-    except Exception as e:  # noqa: BLE001
-        return _fail_run(run, s, f"Không tải được video từ MinIO: {e}")
-    from agents.publisher.tools import publish_video
-    result = publish_video(video_path=local_path, caption=full_caption)
-    Path(local_path).unlink(missing_ok=True)
-    if result.get("status") == "failed":
-        return _fail_run(run, s, result.get("error") or "publish failed", result)
+    from agents.publisher.publish_service import publish_now
+    result = publish_now(snapshot, actor="human:ui", trigger="on_demand")
+    pub_status = result.get("status")
+    if pub_status == "skipped":
+        # Phanh dedup/limit chặn — không phải lỗi, run vẫn completed.
+        _finish_step(run, s, "skipped", result,
+                     f"Bỏ qua đăng ({result.get('reason')})", data_source="real")
+        s = _start_step(run, "get_video_metrics")
+        _finish_step(run, s, "skipped", None, "Không đăng — bỏ qua kéo metric")
+        run["status"] = "completed"
+        run["updated_at"] = _now()
+        return None
+    if pub_status != "published":
+        return _fail_run(run, s,
+                         result.get("detail") or result.get("reason") or "publish failed", result)
     video_id = result.get("video_id")
     _finish_step(run, s, "ok", result,
-                 "Đăng thành công (SELF_ONLY)"
-                 + (f" • video_id {video_id}" if video_id else " • sandbox chưa trả video_id")
-                 + " • đăng TikTok THẬT",
+                 "Đăng thành công"
+                 + (f" • video_id {video_id}" if video_id else " • sandbox chưa trả video_id"),
                  data_source="real")
 
     # ---- 7. [D] get_video_metrics
@@ -361,13 +397,25 @@ def start_run(topic: str | None = None, library: str = "vng_insider",
     return run
 
 
-def decide_gate(run_id: str, approve: bool) -> dict | None:
+def decide_gate(run_id: str, decision: str | None = None,
+                scheduled_for: datetime | None = None,
+                approve: bool | None = None) -> dict | None:
+    """Human gate 3 lựa chọn: 'now' (đăng ngay) | 'schedule' (lên lịch) | 'reject'.
+
+    Backward-compat: tham số cũ `approve=True` → 'now', `approve=False` → 'reject'.
+    `scheduled_for` (UTC aware) chỉ dùng khi decision='schedule'.
+    """
     run = _RUNS.get(run_id)
     if run is None:
         return None
     if run["status"] != "awaiting_approval":
         return run  # idempotent — gate đã quyết hoặc chưa tới
-    run["gate"]["decision"] = "approved" if approve else "rejected"
+    if approve is not None:
+        decision = "now" if approve else "reject"
+    if decision in (None, "approved"):  # alias cũ "approved" → "now"; default an toàn
+        decision = "now" if decision == "approved" else "reject"
+    run["gate"]["decision"] = decision
+    run["gate"]["scheduled_for"] = scheduled_for
     run["gate"]["decided_at"] = _now()
     _GATES[run_id].set()
     return run

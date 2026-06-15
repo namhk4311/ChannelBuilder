@@ -42,7 +42,11 @@ venv/
 CLAUDE.md
 AGENTS.md
 plans/templates/
+plans/
+docs/
 # end gigikit-managed
 .greennode.json
 .agentbase/
 .env.agentbase
+
+tests/

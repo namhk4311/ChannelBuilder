@@ -55,7 +55,7 @@ export function PipelineFlow({ agents, steps = [] }: PipelineFlowProps) {
                   <div
                     className={cn(
                       'rounded-lg border border-dashed border-border bg-card px-3 py-2.5 space-y-1.5',
-                      isActive && 'border-solid border-amber-500 ring-1 ring-amber-500',
+                      isActive && 'border-solid border-amber-500 ring-1 ring-inset ring-amber-500',
                     )}
                   >
                     <div className="flex items-center gap-1.5">
@@ -84,7 +84,7 @@ export function PipelineFlow({ agents, steps = [] }: PipelineFlowProps) {
                 <div
                   className={cn(
                     'min-w-[148px] rounded-lg border border-border bg-card px-3 py-2.5 space-y-1.5',
-                    isActive && 'border-blue-500 ring-1 ring-blue-500',
+                    isActive && 'border-blue-500 ring-1 ring-inset ring-blue-500',
                     status === 'failed' && 'border-destructive',
                   )}
                 >
