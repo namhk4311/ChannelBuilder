@@ -325,6 +325,18 @@ def _validate_script(pkg: dict) -> list:
     return warnings
 
 
+# TTS tiếng Việt đọc viết tắt "ck" thành "xê-ca" → ép về chữ đầy đủ "chồng" trước khi
+# đưa Producer/TTS. Prompt đã cấm viết tắt nhưng LLM phi tất định nên vẫn cần net này.
+# Chỉ thay token đứng riêng (ck / Ck / CK), KHÔNG đụng "ck" nằm trong từ khác (vd "track").
+_CK_TOKEN_RE = re.compile(r"\bck\b", re.IGNORECASE)
+
+
+def _normalize_ck(text: str) -> str:
+    if not text:
+        return text
+    return _CK_TOKEN_RE.sub(lambda m: "Chồng" if m.group(0)[0].isupper() else "chồng", text)
+
+
 def _script_to_text(lines: list) -> str:
     """script = nguyên văn lời thoại liền mạch (Producer tự phân line/duration/voice)."""
     return " ".join(l.get("voiceover", "").strip() for l in lines if l.get("voiceover"))
@@ -414,6 +426,13 @@ def _do_generate_script(idea, insight_digest=None, target_duration_sec=48):
         log.info("script · parse JSON (%d chars raw)", len(raw))
         pkg = _extract_json(raw)
         pkg["idea"] = idea
+        # TTS guard: ép "ck" → "chồng" trong lời thoại + hook + caption (model đôi khi vẫn viết tắt)
+        for line in pkg.get("script", []):
+            if isinstance(line, dict) and line.get("voiceover"):
+                line["voiceover"] = _normalize_ck(line["voiceover"])
+        for fld in ("text_hook", "caption"):
+            if pkg.get(fld):
+                pkg[fld] = _normalize_ck(pkg[fld])
         warnings = _validate_script(pkg)  # validate trên bản structured
         if warnings:
             log.warning("script · %d warnings từ validator: %s", len(warnings), warnings[:3])
