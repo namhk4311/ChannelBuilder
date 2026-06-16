@@ -107,7 +107,7 @@ export function InfoFields({
         </Label>
         <Textarea
           id="wf-event-text"
-          placeholder="Dán đoạn tin/thông báo cần làm video — vd: Chính phủ Mỹ ra lệnh tạm dừng vài mô hình AI lớn để rà soát an toàn…"
+          placeholder="Dán đoạn tin/thông báo cần làm video — vd: Giải đấu Esports Mùa Hè 2026 khởi tranh 20/6, tổng giải thưởng 2 tỷ đồng, 16 đội tuyển tranh tài…"
           value={eventText}
           onChange={(e) => setEventText(e.target.value)}
           disabled={runActive}
