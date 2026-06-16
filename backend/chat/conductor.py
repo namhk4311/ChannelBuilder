@@ -65,9 +65,9 @@ def _new_spec() -> dict:
         "visual_style": None, "brand": None,
         # music_track_id=None mơ hồ (chưa hỏi vs chọn 'không nhạc') → cờ riêng để biết đã chọn.
         "music_decided": False,
-        # publish_mode mặc định 'review_publish' (non-null) → cần cờ riêng để biết user ĐÃ chọn
-        # qua chip chưa. schedule_time_decided: đã hỏi giờ hẹn (khi publish_mode='schedule') chưa.
-        "publish_decided": False, "schedule_time_decided": False,
+        # publish_mode mặc định 'review_publish' (non-null) → cờ riêng để biết user ĐÃ chọn qua chip
+        # chưa. Giờ hẹn KHÔNG hỏi ở chat — chọn ở bước duyệt (gate) khi chạy workflow.
+        "publish_decided": False,
     }
 
 
@@ -155,12 +155,10 @@ _CHIP_FIELDS = {"mode", "visual_style", "brand", "n_scenes", "library", "music_t
 
 
 def _publish_awaited(spec: dict) -> Optional[str]:
-    """Đuôi gom CHUNG cho cả vlog & info: chế độ đăng (chip) → giờ hẹn (text, nếu lên lịch).
-    Trả None khi đã chốt cách đăng (review_publish, hoặc schedule đã hỏi giờ)."""
+    """Đuôi gom CHUNG cho cả vlog & info: chỉ chế độ đăng (chip). KHÔNG hỏi giờ hẹn ở chat —
+    user chọn giờ ở bước duyệt (gate) khi chạy workflow. Trả None khi đã chốt cách đăng."""
     if not spec.get("publish_decided"):
         return "publish_mode"
-    if spec.get("publish_mode") == "schedule" and not spec.get("schedule_time_decided"):
-        return "scheduled_for"   # TEXT tự do — LLM parse "9h sáng mai" → ISO
     return None
 
 
@@ -264,13 +262,8 @@ def _apply_chip_answer(conv: dict, text: str, libs: list[dict], music: list[dict
             if f == "music_track_id":
                 spec["music_decided"] = True   # gồm cả 'Không nhạc' (val=None)
             elif f == "publish_mode":
-                spec["publish_decided"] = True   # 'Đăng ngay' → khỏi hỏi giờ; 'Lên lịch' → hỏi giờ
+                spec["publish_decided"] = True   # chốt cách đăng; giờ hẹn chọn ở gate khi chạy
             log.info("conductor · chip → spec[%s]=%r", f, val)
-    elif f == "scheduled_for" and (text or "").strip():
-        # Đang chờ giờ hẹn (publish_mode=schedule) → đánh dấu đã hỏi. ISO giờ cụ thể do LLM
-        # parse vào spec_patch.scheduled_for (vd "9h sáng mai" → ISO); không parse được → slot mặc định.
-        spec["schedule_time_decided"] = True
-        log.info("conductor · text → schedule_time_decided (raw=%r)", text.strip()[:40])
     elif f == "topic" and len((text or "").strip()) >= 2:
         # Đang chờ chủ đề (vlog) → câu user CHÍNH LÀ topic (LLM hay quên ghi spec_patch.topic
         # → topic kẹt null, đẩy thẳng tới chip xác nhận mà chưa hỏi chủ đề bao giờ).
@@ -1031,10 +1024,6 @@ def send_message(conv_id: str, text: str) -> Optional[dict]:
                     ui_options = _options_for_field("publish_mode", libs, music, spec)
                     if not reply:
                         reply = "Bạn muốn đăng video thế nào — đăng ngay sau duyệt hay lên lịch?"
-                elif spec.get("publish_mode") == "schedule" and not spec.get("schedule_time_decided"):
-                    action, ui_kind, field = "ask", "ask", "scheduled_for"
-                    if not reply:
-                        reply = "Bạn muốn hẹn đăng vào lúc nào? (vd “9h sáng mai”, “20h tối nay”)"
                 else:
                     lib = spec.get("library") or (usable[0]["value"] if usable else "vng_insider")
                     run = start_run(
@@ -1071,10 +1060,6 @@ def send_message(conv_id: str, text: str) -> Optional[dict]:
                     ui_options = _options_for_field("publish_mode", libs, music, spec)
                     if not reply:
                         reply = "Bạn muốn đăng video thế nào — đăng ngay sau duyệt hay lên lịch?"
-                elif spec.get("publish_mode") == "schedule" and not spec.get("schedule_time_decided"):
-                    action, ui_kind, field = "ask", "ask", "scheduled_for"
-                    if not reply:
-                        reply = "Bạn muốn hẹn đăng vào lúc nào? (vd “9h sáng mai”, “20h tối nay”)"
                 else:
                     run = start_run(
                         topic=spec.get("topic"), library=lib,
