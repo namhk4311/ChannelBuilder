@@ -34,6 +34,19 @@ log = logging.getLogger(__name__)
 _ANALYST_FAKE_DELAY_MIN = 60.0
 _ANALYST_FAKE_DELAY_MAX = 120.0
 
+# Loading giả của bước [A] Scout ở chế độ "Video thông tin" (giây). Khác vlog: info mode
+# KHÔNG scrape trend TikTok thật bằng LLM (chỉ phân tích event_text → dummy data),
+# nên pad ~1 phút (tick progress + message) cho thấy "Scout đang quét trend" lúc demo.
+_SCOUT_INFO_FAKE_DELAY_MIN = 55.0
+_SCOUT_INFO_FAKE_DELAY_MAX = 65.0
+
+_SCOUT_INFO_MSGS = [
+    "Đọc & bóc tách nội dung thông tin đầu vào…",
+    "Dò loại nội dung (event game / thông báo / sự kiện)…",
+    "Quét ngữ cảnh & góc nhìn phù hợp để dựng video…",
+    "Chốt insight + mood chuyển cho Creative…",
+]
+
 STEP_PLAN: list[dict[str, str]] = [
     {"id": "scan_trends", "agent": "scout", "code": "A", "tool": "scan_trends",
      "title": "Quét trend thị trường"},
@@ -588,10 +601,21 @@ def _run_pipeline_info(run: dict) -> None:  # noqa: PLR0915 — đi qua đủ ST
     gen_images = vstyle["gen_images"]
 
     # ---- 1. [A] scan_trends ← detect loại nội dung + phân tích
+    # Info mode KHÔNG scrape trend TikTok thật như vlog — chỉ phân tích event_text (dummy data).
+    # Pad fake loading ~1 phút (tick progress + message) cho thấy "Scout đang quét" lúc demo,
+    # GIỮ nguyên logic detect_content_type + analyze_event (cần cho generate_angles/storyboard).
     s = _start_step(run, "scan_trends")
+    total = random.uniform(_SCOUT_INFO_FAKE_DELAY_MIN, _SCOUT_INFO_FAKE_DELAY_MAX)
+    ticks = 30
+    for i in range(ticks):
+        time.sleep(total / ticks)
+        s["progress"] = int((i + 1) / ticks * 96)
+        s["summary"] = _SCOUT_INFO_MSGS[min(i * len(_SCOUT_INFO_MSGS) // ticks, len(_SCOUT_INFO_MSGS) - 1)]
+        run["updated_at"] = _now()
     ctype = event_game.detect_content_type(run["event_text"] or "")
     run["content_type"] = ctype
     analysis = event_game.analyze_event(run["event_text"] or "", preset=ctype)
+    s["progress"] = 100
     _finish_step(run, s, "ok", {**analysis, "content_type": ctype},
                  f"Loại: {get_preset(ctype)['label']} • Góc nhìn: {analysis.get('insight')}",
                  data_source="real")
