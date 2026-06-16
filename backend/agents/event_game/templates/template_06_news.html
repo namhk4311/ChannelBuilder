@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=Be+Vietnam+Pro:wght@500;600;700;800&display=swap" rel="stylesheet" />
+<style>
+  :root { --primary:@@PRIMARY@@; --secondary:@@SECONDARY@@; --accent:@@ACCENT@@;
+    --bg:@@BG@@; --text:@@TEXT@@; --muted:@@MUTED@@; --pattern:@@PATTERN@@;
+    --tt-accent:var(--accent); --tt-on-accent:var(--bg); }
+  @@TREATMENTS_CSS@@
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html, body { width:1080px; height:1920px; overflow:hidden; background:var(--bg); }
+  body { font-family:'Be Vietnam Pro', system-ui, sans-serif; color:var(--text); }
+  .stage { position:relative; width:1080px; height:1920px; overflow:hidden; background:var(--bg); }
+  .pattern { position:absolute; inset:0;
+    background-image:
+      repeating-linear-gradient(45deg, var(--pattern) 0 1px, transparent 1px 22px),
+      repeating-linear-gradient(-45deg, var(--pattern) 0 1px, transparent 1px 22px); }
+  #dark { position:absolute; inset:0; background:var(--bg); will-change:opacity; }
+  #flash { position:absolute; inset:0; background:#fff; opacity:0; pointer-events:none; }
+
+  .content { position:absolute; left:80px; right:80px; top:50%; transform:translateY(-50%);
+    display:flex; flex-direction:column; align-items:center; text-align:center; gap:26px; }
+  #kicker { font-family:'Oswald',sans-serif; font-weight:700; font-size:34px; letter-spacing:6px;
+    text-transform:uppercase; will-change:transform,opacity,filter; }
+  #title { font-family:'Oswald',sans-serif; font-weight:700; font-size:110px; line-height:0.96;
+    letter-spacing:-1px; text-transform:uppercase; max-width:940px; }
+  .tw { display:inline-block; will-change:transform,opacity,filter; }
+  .bar { height:8px; width:0; background:var(--accent); will-change:width; }
+  #subtitle { font-weight:600; font-size:40px; line-height:1.25; color:var(--muted); max-width:860px;
+    will-change:transform,opacity,filter; }
+  .meta { display:flex; gap:14px; flex-wrap:wrap; justify-content:center; will-change:transform,opacity; }
+  .chip { font-family:'Oswald',sans-serif; font-weight:600; font-size:28px; padding:8px 20px;
+    border:2px solid var(--accent); }
+  .highlights { display:flex; flex-direction:column; gap:14px; align-items:flex-start; text-align:left;
+    max-width:880px; margin:4px auto 0; will-change:transform; }
+  .hl { font-weight:600; font-size:34px; line-height:1.22; color:var(--text); display:flex;
+    align-items:flex-start; gap:14px; will-change:transform,opacity; }
+  .hl .dot { width:12px; height:12px; background:var(--accent); flex:none; margin-top:0.4em; transform:rotate(45deg); }
+  #cta { position:absolute; left:0; right:0; bottom:250px; text-align:center; font-family:'Oswald',sans-serif;
+    font-weight:700; font-size:38px; text-transform:uppercase; letter-spacing:1px; color:var(--accent);
+    will-change:transform,opacity; }
+  #caption { position:absolute; left:70px; right:70px; bottom:120px; text-align:center; font-weight:700;
+    font-size:42px; line-height:1.25; color:var(--text); opacity:0; }
+</style>
+</head>
+<body>
+  <div class="stage">
+    <div class="pattern"></div>
+    <div class="content">
+      <div id="kicker" class="tt-block">@@KICKER@@</div>
+      <h1 id="title">@@TITLE@@</h1>
+      <div class="bar" id="bar"></div>
+      @@SUBTITLE_BLOCK@@
+      @@HIGHLIGHTS_BLOCK@@
+      @@META_BLOCK@@
+    </div>
+    <div id="cta">@@CTA@@</div>
+    <div id="caption"></div>
+    <div id="dark"></div>
+    <div id="flash"></div>
+  </div>
+<script>@@TIMELINE_JS@@</script>
+<script>
+  window.DURATION_SEC = @@DURATION_SEC@@;
+  var CAPS = @@CAPTIONS_JSON@@;
+  var FIT = { maxFont: 110, minFont: 56, maxW: 940 };
+
+  window.seek = function (t) {
+    var B = window.BT;
+    B.bg(t, { fl: 0 });
+    B.entrance(t, 'kicker', 0.25, 0.5, -28);
+    B.entranceWords(t, 0.5, 0.09, 46);
+    var bp = B.seg(t, 1.0, 0.5), bar = document.getElementById('bar');
+    if (bar) bar.style.width = B.lerp(0, 360, bp) + 'px';
+    B.entrance(t, 'subtitle', 1.15, 0.55, 22);
+    var items = document.querySelectorAll('.hl'), i;
+    for (i = 0; i < items.length; i++) { var p = B.seg(t, 1.35 + i * 0.18, 0.5);
+      items[i].style.opacity = p; items[i].style.transform = 'translateY(' + B.lerp(16, 0, p) + 'px)'; }
+    B.entrance(t, 'period', 1.5, 0.5, 20);
+    B.entrance(t, 'cta', 1.7, 0.5, 24);
+    B.caption(t, CAPS, 'caption');
+  };
+
+  window.BT.init({ emphasis: -1, emberCount: 0, maxFont: FIT.maxFont, minFont: FIT.minFont, maxW: FIT.maxW });
+  window.seek(0);
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(function () {
+    window.BT.autofitTitle(FIT); window.BT.fitHighlights(460); window.seek(window._T || 0); });
+</script>
+</body>
+</html>

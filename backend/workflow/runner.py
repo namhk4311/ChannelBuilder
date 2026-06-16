@@ -57,11 +57,17 @@ STEP_PLAN: list[dict[str, str]] = [
      "title": "Phân tích batch + insight (Analyst)"},
 ]
 
+# Event game dùng CHUNG STEP_PLAN với vlog (đi qua đúng workflow chuẩn) — chỉ khác
+# công việc bên trong từng step (xem _run_pipeline_info).
+
 _RUNS: dict[str, dict[str, Any]] = {}
 _GATES: dict[str, threading.Event] = {}          # publish gate
 _SCRIPT_GATES: dict[str, threading.Event] = {}   # script review/edit gate
 _IDEA_GATES: dict[str, threading.Event] = {}     # idea selection gate
-_SEQ = itertools.count(1)
+# Bắt đầu seq từ offset theo thời gian khởi động (KHÔNG reset về 1 mỗi lần restart) →
+# run_id không trùng id cũ đang nằm trong session đã lưu DB (tránh sidebar kẹt / lẫn run
+# giữa các session sau khi restart backend).
+_SEQ = itertools.count(int(datetime.now(timezone.utc).timestamp()) % 1_000_000 + 1)
 _MAX_RUNS = 50
 
 
@@ -86,10 +92,21 @@ def _new_run(topic: str | None, library: str,
              review_script: bool = False,
              pick_idea: bool = False,
              publish_mode: str = "review_publish",
-             qc_mode: str = "auto") -> dict:
+             qc_mode: str = "auto",
+             mode: str = "vlog",
+             event_text: str | None = None,
+             n_scenes: int = 2,
+             content_type: str | None = None,
+             visual_style: str = "image",
+             brand: str = "vng") -> dict:
     run_id = f"run_{next(_SEQ):04d}"
+    plan = STEP_PLAN   # cả vlog lẫn video thông tin đi qua cùng workflow chuẩn
     run = {
         "id": run_id, "topic": topic,
+        # mode="vlog" (clip có sẵn) | "info" (video thông tin: gen ảnh / nền brand + banner động)
+        "mode": mode, "event_text": event_text, "n_scenes": n_scenes,
+        # content_type tự detect trong pipeline; visual_style/brand do user chọn (chip)
+        "content_type": content_type, "visual_style": visual_style, "brand": brand,
         "library": library, "subtitles": subtitles, "n_ideas": n_ideas,
         "music_track_id": music_track_id,
         "beat_sync": beat_sync,
@@ -119,7 +136,7 @@ def _new_run(topic: str | None, library: str,
              "data_source": None, "progress": None,
              # True khi step được chạy lại (vd Viết kịch bản sửa theo feedback QC) → UI badge "Đã sửa lại".
              "revised": False}
-            for s in STEP_PLAN
+            for s in plan
         ],
     }
     # Evict run cũ nhất khi quá _MAX_RUNS (giữ memory bound như JOBS producer).
@@ -453,24 +470,37 @@ def _run_pipeline(run: dict) -> None:  # noqa: PLR0915 — pipeline tuần tự,
                  f"TTS {'cache' if produce_result.get('tts_cache_hit') else 'mới'} • render thật + MinIO",
                  data_source="real")
 
+    # ---- 5-7. [★] human gate + [D] publish + metrics — dùng chung với event_game
+    caption = (package.get("caption") or "").strip()
+    hashtags = " ".join(package.get("hashtags") or [])
+    full_caption = f"{caption} {hashtags}".strip()
+    return _gate_and_publish(run, video_url, full_caption,
+                             package.get("script") or "", package.get("text_hook"),
+                             produce_result.get("final_duration_sec"))
+
+
+def _gate_and_publish(run: dict, video_url: str | None, full_caption: str,
+                      script: str, text_hook: str | None,
+                      duration_sec: float | None) -> None:
+    """Human gate + publish + metrics — chia sẻ giữa vlog và event_game.
+
+    Set step `human_approval` → awaiting → chờ gate → reject/schedule/now → publish → metrics.
+    Dùng id step `human_approval`/`publish_video`/`get_video_metrics` (có ở cả 2 step plan).
+    """
     # ---- 5. [★] human gate — Human decide
     s = _start_step(run, "human_approval")
     s["status"] = "awaiting"
     run["status"] = "awaiting_approval"
-    caption = (package.get("caption") or "").strip()
-    hashtags = " ".join(package.get("hashtags") or [])
-    full_caption = f"{caption} {hashtags}".strip()
     s["output"] = {"video_url": video_url, "caption": full_caption,
-                   "text_hook": package.get("text_hook"),
-                   "duration_sec": produce_result.get("final_duration_sec")}
+                   "text_hook": text_hook, "duration_sec": duration_sec}
     s["summary"] = "Pipeline tạm dừng — chờ human duyệt trước khi đăng"
     run["updated_at"] = _now()
     _GATES[run["id"]].wait()
     decision = run["gate"]["decision"]
     snapshot = {"run_id": run["id"], "library": run["library"],
                 "video_object": video_url, "caption": full_caption,
-                "script": package.get("script") or "",
-                "text_hook": package.get("text_hook")}
+                "script": script or "",
+                "text_hook": text_hook}
 
     # ---- 5a. Từ chối → dừng, không đăng
     if decision == "reject":
@@ -541,6 +571,139 @@ def _run_pipeline(run: dict) -> None:  # noqa: PLR0915 — pipeline tuần tự,
     return None
 
 
+def _run_pipeline_info(run: dict) -> None:  # noqa: PLR0915 — đi qua đủ STEP_PLAN
+    """Video thông tin đi qua ĐÚNG STEP_PLAN như vlog (gate idea AUTO; script gate như vlog):
+      scan_trends=detect loại ND + phân tích · generate_ideas=góc dựng · generate_script=storyboard ·
+      produce_video=[gen]+render+ghép+nhạc · human_approval=gate · publish · metrics.
+    content_type tự detect → preset (giọng); visual_style → template group + gen ảnh.
+    Vlog (_run_pipeline) KHÔNG đụng tới.
+    """
+    from agents import event_game
+    from agents.event_game import get_preset, get_visual_style
+
+    # visual_style (user chọn) → nhóm template + có gen ảnh
+    vstyle = get_visual_style(run.get("visual_style"))
+    templates_allowed = vstyle["templates"]
+    default_template = vstyle["default_template"]
+    gen_images = vstyle["gen_images"]
+
+    # ---- 1. [A] scan_trends ← detect loại nội dung + phân tích
+    s = _start_step(run, "scan_trends")
+    ctype = event_game.detect_content_type(run["event_text"] or "")
+    run["content_type"] = ctype
+    analysis = event_game.analyze_event(run["event_text"] or "", preset=ctype)
+    _finish_step(run, s, "ok", {**analysis, "content_type": ctype},
+                 f"Loại: {get_preset(ctype)['label']} • Góc nhìn: {analysis.get('insight')}",
+                 data_source="real")
+
+    # ---- 2. [B] generate_ideas ← sinh góc dựng
+    s = _start_step(run, "generate_ideas")
+    angles = event_game.generate_angles(run["event_text"] or "", analysis, n=3, preset=ctype)
+    ideas = angles.get("ideas") or []
+    _finish_step(run, s, "ok", angles,
+                 f"{len(ideas)} góc dựng • LLM sinh thật", data_source="real")
+
+    # ---- 2b. [★] idea_approval — AUTO chọn góc tốt nhất (không dừng hỏi)
+    s = _start_step(run, "idea_approval")
+    best = max(ideas, key=lambda i: i.get("est_fit") or 0) if ideas else {"title": "Tổng quan", "angle": None}
+    _finish_step(run, s, "skipped", {"chosen": best.get("title")}, f"Tự chọn góc: {best.get('title')}")
+
+    # ---- 3. [B] generate_script ← storyboard bám góc đã chọn
+    s = _start_step(run, "generate_script")
+    try:
+        sb = event_game.build_storyboard(
+            run["event_text"] or "", run["n_scenes"], angle=best.get("angle"),
+            preset=ctype, templates_allowed=templates_allowed,
+            default_template=default_template, gen_images=gen_images)
+    except Exception as e:  # noqa: BLE001
+        return _fail_run(run, s, f"Storyboard lỗi: {e}")
+    run["storyboard"] = sb
+    scenes = sb["scenes"]
+    package = {
+        "script": " ".join((x.get("voiceover") or "") for x in scenes).strip(),
+        "caption": sb.get("caption"), "hashtags": sb.get("hashtags"),
+        "text_hook": scenes[0].get("event_title") if scenes else None,
+    }
+    _finish_step(run, s, "ok",
+                 {"scenes": [{"template": x["template"], "title": x["event_title"]} for x in scenes],
+                  "caption": sb.get("caption"), "hashtags": sb.get("hashtags")},
+                 f"{len(scenes)} cảnh: " + " → ".join(x["event_title"] for x in scenes),
+                 data_source="real")
+
+    # ---- 3a. [★] qc_script — QC kịch bản kiểm clip/coverage/shot_list (dành cho vlog ghép clip).
+    # Video thông tin dùng banner gen ảnh / nền brand (KHÔNG có thư viện clip) → QC không áp dụng → skip.
+    s = _start_step(run, "qc_script")
+    _finish_step(run, s, "skipped", None,
+                 "QC kịch bản chỉ áp cho vlog (ghép clip) — video thông tin bỏ qua")
+
+    # ---- 3b. [★] script_approval — duyệt/sửa kịch bản + caption + hashtag (như vlog)
+    s = _start_step(run, "script_approval")
+    if not run.get("review_script"):
+        _finish_step(run, s, "skipped", None, "Không bật duyệt kịch bản (full-auto)")
+    else:
+        s["status"] = "awaiting"
+        run["status"] = "awaiting_script"
+        s["output"] = {
+            "script": package["script"], "text_hook": package["text_hook"],
+            "caption": sb.get("caption"), "hashtags": sb.get("hashtags"),
+            "title": sb.get("subject"),
+        }
+        s["summary"] = "Pipeline tạm dừng — chờ human duyệt/sửa kịch bản"
+        run["updated_at"] = _now()
+        _SCRIPT_GATES[run["id"]].wait()
+        if run["script_gate"]["decision"] != "approved":
+            _finish_step(run, s, "rejected", s["output"], "Human huỷ ở bước kịch bản")
+            for other in run["steps"]:
+                if other["status"] == "pending":
+                    other["status"] = "skipped"
+            run["status"] = "rejected"
+            run["updated_at"] = _now()
+            return None
+        edited = False
+        if run.get("script_override"):
+            # Chẻ lại lời thoại đã sửa cho từng cảnh (theo ranh giới câu)
+            from agents.event_game.storyboard import _split_sentences
+            chunks = _split_sentences(run["script_override"], len(scenes))
+            for i, sc in enumerate(scenes):
+                if i < len(chunks) and chunks[i]:
+                    sc["voiceover"] = chunks[i]
+            package["script"] = run["script_override"]; edited = True
+        if run.get("caption_override"):
+            sb["caption"] = run["caption_override"]; package["caption"] = run["caption_override"]; edited = True
+        if run.get("hashtags_override"):
+            sb["hashtags"] = run["hashtags_override"]; package["hashtags"] = run["hashtags_override"]; edited = True
+        run["status"] = "running"
+        _finish_step(run, s, "ok", {"caption": sb.get("caption")},
+                     "Đã duyệt kịch bản" + (" (đã sửa)" if edited else ""))
+
+    # ---- 4. [C] produce_video ← gen ảnh + render + ghép + nhạc (progress %)
+    s = _start_step(run, "produce_video")
+
+    def cb(percent: int, message: str) -> None:
+        s["progress"] = percent
+        s["summary"] = message
+        run["updated_at"] = _now()
+
+    try:
+        result = event_game.produce(run, sb, progress_cb=cb)
+    except Exception as e:  # noqa: BLE001
+        return _fail_run(run, s, f"Producer event game lỗi: {e}")
+    s["progress"] = 100
+    video_url = result.get("output_url")
+    _finish_step(run, s, "ok", result,
+                 f"{result.get('final_duration_sec')}s • {result.get('n_scenes')} cảnh • "
+                 f"nhạc {'có' if run.get('music_track_id') else 'không'} • render + MinIO",
+                 data_source="real")
+
+    # ---- 5-7. [★] gate + [D] publish + metrics — dùng chung với vlog
+    caption = (package.get("caption") or "").strip()
+    hashtags = " ".join(package.get("hashtags") or [])
+    full_caption = f"{caption} {hashtags}".strip()
+    return _gate_and_publish(run, video_url, full_caption,
+                             package.get("script") or "", package.get("text_hook"),
+                             result.get("final_duration_sec"))
+
+
 # ------------------------------------------------------------------ public API
 
 def start_run(topic: str | None = None, library: str = "vng_insider",
@@ -551,7 +714,13 @@ def start_run(topic: str | None = None, library: str = "vng_insider",
               review_script: bool = False,
               pick_idea: bool = False,
               publish_mode: str = "review_publish",
-              qc_mode: str = "auto") -> dict:
+              qc_mode: str = "auto",
+              mode: str = "vlog",
+              event_text: str | None = None,
+              n_scenes: int = 2,
+              content_type: str | None = None,
+              visual_style: str = "image",
+              brand: str = "vng") -> dict:
     run = _new_run(topic, library, subtitles, n_ideas,
                    music_track_id=music_track_id,
                    beat_sync=beat_sync,
@@ -559,11 +728,15 @@ def start_run(topic: str | None = None, library: str = "vng_insider",
                    review_script=review_script,
                    pick_idea=pick_idea,
                    publish_mode=publish_mode,
-                   qc_mode=qc_mode)
+                   qc_mode=qc_mode,
+                   mode=mode, event_text=event_text, n_scenes=n_scenes,
+                   content_type=content_type, visual_style=visual_style, brand=brand)
+    # "info" = video thông tin (gen ảnh / nền brand). "event_game" = alias cũ (session cũ).
+    _pipeline_fn = _run_pipeline_info if mode in ("info", "event_game") else _run_pipeline
 
     def _wrapper() -> None:
         try:
-            _run_pipeline(run)
+            _pipeline_fn(run)
         except Exception as e:  # noqa: BLE001 — run hỏng không được sập backend
             log.exception("workflow %s crashed", run["id"])
             active = next((st for st in run["steps"]

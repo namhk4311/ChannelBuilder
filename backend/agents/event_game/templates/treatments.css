@@ -1,0 +1,76 @@
+/* Toolkit chữ nghệ thuật — class dùng chung cho các template (inject qua placeholder TREATMENTS_CSS).
+   Tách "nghệ thuật" ra khỏi font: áp treatment lên font VN-safe heavy (đủ dấu tiếng Việt).
+   Tham số hoá qua CSS var để mỗi template tự nhuộm màu. */
+
+/* outline + fill: viền dày + ruột màu (paint-order để fill nằm trên stroke) */
+.tt-outline {
+  color: var(--tt-fill, #ffffff);
+  -webkit-text-stroke: var(--tt-stroke-w, 3px) var(--tt-stroke, #15131f);
+  paint-order: stroke fill;
+}
+
+/* dual-tone: dùng kèm <span class="tt-2"> cho phần đổi màu */
+.tt-2 { color: var(--tt-accent, #ffcc4d); }
+
+/* foil kim loại: gradient ánh kim clip vào chữ; sheen chạy qua seek (foilSheen) */
+.tt-foil {
+  background: linear-gradient(100deg,
+    var(--tt-foil-a, #b8860b) 0%,
+    var(--tt-foil-b, #fff7d6) 44%,
+    var(--tt-foil-c, #ffd24a) 60%,
+    var(--tt-foil-a, #b8860b) 92%);
+  background-size: 230% 100%;
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+  filter: drop-shadow(0 4px 18px rgba(0,0,0,0.55));
+}
+
+/* 3D extrude: stacked shadow tạo khối nổi (đổ về dưới-phải) */
+.tt-extrude {
+  color: var(--tt-fill, #ffffff);
+  text-shadow:
+    1px 1px 0 var(--tt-depth, #6b4d12), 2px 2px 0 var(--tt-depth, #6b4d12),
+    3px 3px 0 var(--tt-depth, #6b4d12), 4px 4px 0 var(--tt-depth, #6b4d12),
+    5px 5px 0 var(--tt-depth, #6b4d12), 6px 6px 0 var(--tt-depth, #6b4d12),
+    7px 8px 14px rgba(0,0,0,0.55);
+}
+
+/* mix-size: nhấn 1 từ to + đậm hơn (init đánh dấu .tt-em vào span từ được nhấn) */
+.tt-em { font-size: 1.22em; font-weight: 900; letter-spacing: -2px; }
+
+/* slash/flair phụ kiện (dùng tự do trong template) */
+.tt-slash { display: inline-block; width: 4px; height: 0.8em; background: var(--tt-accent, #ffcc4d);
+  transform: skewX(-16deg); margin: 0 2px; vertical-align: -0.06em; }
+
+/* gradient fill: chữ nhuộm gradient (clip vào chữ) — cho template solid/slide */
+.tt-gradient {
+  background: linear-gradient(100deg, var(--tt-grad-a, var(--accent, #ff6a00)) 0%,
+    var(--tt-grad-b, var(--text, #ffffff)) 92%);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+
+/* highlight marker: nền accent sau chữ (span.tt-mark) — kiểu bút dạ quang */
+.tt-mark {
+  background: var(--tt-accent, var(--accent, #ff6a00)); color: var(--tt-on-accent, #ffffff);
+  padding: 0 0.12em; border-radius: 0.06em;
+  -webkit-box-decoration-break: clone; box-decoration-break: clone;
+}
+
+/* underline accent dày dưới chữ */
+.tt-underline { box-shadow: inset 0 -0.14em 0 var(--tt-accent, var(--accent, #ff6a00)); }
+
+/* strikethrough: gạch ngang accent xuyên chữ (tiêu đề kiểu "bị tắt", như tin nóng) */
+.tt-strike {
+  background-image: linear-gradient(var(--tt-accent, var(--accent, #e8553d)),
+    var(--tt-accent, var(--accent, #e8553d)));
+  background-size: 100% 0.09em; background-position: 0 55%; background-repeat: no-repeat;
+}
+
+/* chữ trong khối màu (kicker/label) */
+.tt-block {
+  background: var(--tt-accent, var(--accent, #ff6a00)); color: var(--tt-on-accent, #ffffff);
+  padding: 0.12em 0.5em; display: inline-block;
+}
+
+/* dữ kiện NỔI BẬT trong bullet/subtitle (số/%, tên riêng) — tô accent + đậm.
+   Dùng chung mọi template; !important để thắng cả #subtitle (ID selector). */
+.hl-key { color: var(--accent, #ff6a00) !important; font-weight: 800; }

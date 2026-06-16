@@ -27,7 +27,7 @@ import { IdeaGate } from '@/components/chat/idea-gate'
 import { ScriptGate } from '@/components/chat/script-gate'
 import { ApprovalGate } from '@/components/workflow/approval-gate'
 
-const STARTERS = ['Một ngày ở canteen VNG', 'Góc học tập ở campus', 'Phỏng vấn intern mùa hè']
+const STARTERS = ['🎬 Vlog clip có sẵn', '📢 Video thông tin']
 
 /**
  * Tab Chat — bố cục 3 cột kiểu cowork: lịch sử (trái) · hội thoại (giữa) ·
@@ -45,7 +45,6 @@ export default function ChatPage() {
   const record = useRecordRun(sessionId)
   const [draft, setDraft] = useState('')
   const scrollRef = useRef<HTMLDivElement>(null)
-  const creating = useRef(false)
   const recorded = useRef<Set<string>>(new Set())
 
   // Kéo co giãn độ rộng panel pipeline (persist localStorage).
@@ -76,16 +75,16 @@ export default function ChatPage() {
   }
 
   // Tạo session lần đầu (hoặc khi session cũ 404 / đã xoá).
+  // Guard bằng state mutation (pending/error) thay vì ref: KHÔNG auto-retry khi
+  // create lỗi (vd backend down) → tránh bắn POST /chat/sessions liên tục.
+  // Lỗi rồi thì user bấm "Mới" để thử lại (handleNew reset state mutation).
+  const createPending = create.isPending
+  const createError = create.isError
+  const createMutate = create.mutate
   useEffect(() => {
-    if (sessionId || creating.current) return
-    creating.current = true
-    create.mutate(undefined, {
-      onSuccess: (s) => setSessionId(s.id),
-      onSettled: () => {
-        creating.current = false
-      },
-    })
-  }, [sessionId, create, setSessionId])
+    if (sessionId || createPending || createError) return
+    createMutate(undefined, { onSuccess: (s) => setSessionId(s.id) })
+  }, [sessionId, createPending, createError, createMutate, setSessionId])
 
   useEffect(() => {
     if (session.isError) setSessionId(null)

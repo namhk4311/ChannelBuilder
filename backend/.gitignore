@@ -10,5 +10,6 @@ agents/creative/result/
 agents/scout/samples/
 agents/analyst/analyst_state.json
 logs/
-
+test/
+test2/
 __pycache__.env.agentbase

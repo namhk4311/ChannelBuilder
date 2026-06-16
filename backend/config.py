@@ -55,8 +55,10 @@ AI_PLATFORM_BASE_URL = (
 AI_PLATFORM_API_KEY = os.getenv("AI_PLATFORM_API_KEY")  # required for producer + creative
 AI_PLATFORM_MODEL   = os.getenv("AI_PLATFORM_MODEL")   or "deepseek/deepseek-v4-flash"  # Producer
 CREATIVE_MODEL      = os.getenv("CREATIVE_MODEL")      or "minimax/minimax-m2.5"        # Creative
-# Chat Conductor (tab Chat) — mặc định dùng chung model với Creative, đổi độc lập qua env.
+# Chat Conductor (tab Chat) — mặc định dùng chung model với Creative (minimax), đổi độc lập qua env.
 CHAT_MODEL          = os.getenv("CHAT_MODEL")          or CREATIVE_MODEL                 # Conductor hội thoại
+# Conductor chỉ sinh 1 JSON định tuyến → cắt budget thinking (max_tokens THẤP) cho nhanh + đỡ rate-limit.
+CHAT_MAX_TOKENS     = int(os.getenv("CHAT_MAX_TOKENS") or 3000)
 # Scout giữ model RIÊNG (tách khỏi CREATIVE_MODEL) — sau này có thể đổi độc lập.
 SCOUT_MODEL         = os.getenv("SCOUT_MODEL")         or "minimax/minimax-m2.5"        # Scout (LLM extract)
 # true (default): Scout dùng LLM extract trang TikTok thật (metric=likes); false: chỉ dataset seed (đỡ quota).
@@ -76,6 +78,11 @@ CREATIVE_QC_MAX_RETRIES = int(os.getenv("CREATIVE_QC_MAX_RETRIES", "2"))
 # 1 model instruct non-thinking ổn định (minimax/minimax-m2.5, hoặc qwen*-instruct nếu
 # MaaS có). Default = CREATIVE_MODEL (giữ nguyên hành vi tới khi set).
 CREATIVE_QC_MODEL = os.getenv("CREATIVE_QC_MODEL") or CREATIVE_MODEL
+
+# ─── LiteLLM (image gen — gpt-image-2) ───────────────────────────────────────
+LITE_LLM_BASE_URL = os.getenv("LITE_LLM_BASE_URL") or "https://aawp-litellm-testing.vnggames.net"
+LITE_LLM_API_KEY  = os.getenv("LITE_LLM_API_KEY")   # required cho auto image-gen
+LITE_LLM_IMAGE_MODEL = os.getenv("LITE_LLM_IMAGE_MODEL") or "gpt-image-2"
 
 # ─── TikTok API — Publisher agent ────────────────────────────────────────────
 TIKTOK_CLIENT_KEY    = os.getenv("TIKTOK_CLIENT_KEY")
