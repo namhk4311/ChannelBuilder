@@ -53,6 +53,11 @@ def _chat(system: str, user: str, temperature: float = 0.4, max_tokens: int = 40
         timeout=(CONNECT_TIMEOUT, READ_TIMEOUT), stream=True,
     )
     resp.raise_for_status()
+    # Route Gemini của MaaS trả Content-Type 'text/event-stream' KHÔNG kèm charset →
+    # requests đoán ISO-8859-1, khiến iter_lines(decode_unicode=True) decode UTF-8 thành
+    # Latin-1 (mojibake kiểu "VÆ¯Æ NG QUá»"). Ép utf-8 cho mọi model (minimax đã
+    # 'charset=utf-8' sẵn nên dòng này vô hại với nó).
+    resp.encoding = "utf-8"
     content, reasoning = [], []
     for raw in resp.iter_lines(decode_unicode=True):
         if not raw or not raw.startswith("data:"):
