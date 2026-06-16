@@ -249,9 +249,35 @@ def _chat(system: str, user: str, temperature: float = 0.85, max_tokens: int = 8
     raise RuntimeError(f"Stream trả về rỗng (finish={finish_reason}).{hint}")
 
 
+# Một số model "thinking" (điển hình minimax/minimax-m2.5) rò khối reasoning
+# <think>…</think> vào `content`, và TỆ hơn: nhả tag </think> NGAY GIỮA token JSON,
+# vd `…viewers.{"</think>\n\nideas": [...]`. find('{')…rfind('}') khi đó cắn vào dấu
+# '{' nằm trong reasoning → blob vỡ; repair_json cứu thì key thành "\n\nideas" (kèm
+# newline) ≠ "ideas" → data.get("ideas") rỗng → "LLM không trả ý tưởng nào" (lúc được
+# lúc không, tuỳ think có tràn vào JSON hay không). Bóc reasoning TRƯỚC khi tách JSON.
+_THINK_CLOSE_RE = re.compile(r"\s*</think>\s*")
+
+
+def _strip_reasoning(text: str) -> str:
+    """Bóc khối <think>…</think> mà thinking-model rò vào content.
+
+    (1) Xoá tag đóng + whitespace quanh nó để token JSON bị </think> chen ngang nối
+        lại (`{"</think>\\n\\nideas"` → `{"ideas"`).
+    (2) Cắt phần reasoning đứng trước JSON (tới dấu '{' đầu tiên còn lại).
+    No-op nếu content không có thẻ think (model instruct sạch như qwen-instruct).
+    """
+    if "<think>" not in text and "</think>" not in text:
+        return text
+    text = _THINK_CLOSE_RE.sub("", text)          # re-glue token JSON bị cắt đôi
+    if "<think>" in text:
+        brace = text.find("{")
+        text = text[brace:] if brace != -1 else text.replace("<think>", "")
+    return text
+
+
 def _extract_json(text: str) -> dict:
-    """Parse JSON từ output LLM, chịu được code fence / text thừa."""
-    text = text.strip()
+    """Parse JSON từ output LLM, chịu được code fence / text thừa / khối <think>."""
+    text = _strip_reasoning(text).strip()
     fence = re.search(r"```(?:json)?\s*(.*?)```", text, re.DOTALL)
     if fence:
         text = fence.group(1).strip()
