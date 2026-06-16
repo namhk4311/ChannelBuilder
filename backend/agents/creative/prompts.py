@@ -86,6 +86,7 @@ Câu TRƯỢT (sai giọng — cấm):
 - "VNG là môi trường làm việc chuyên nghiệp, năng động và sáng tạo." (sáo, quảng cáo)
 - "Hãy ứng tuyển ngay hôm nay để có cơ hội việc làm hấp dẫn!" (lên gân, hô khẩu hiệu)
 - "VNG có rất nhiều tiện ích tốt cho nhân viên." (nhạt, không cảm xúc)
+- "VNG không cần bạn hoàn hảo, chỉ cần bạn dám thử." (xưng "bạn" — GÃY persona "chồng/vợ"; phải nói trống: "VNG không cần hoàn hảo, chỉ cần dám thử nha")
 
 Quy tắc giọng:
 - Mở bằng cú giật (hook), KHÔNG mở bằng "Hôm nay mình sẽ giới thiệu...".
@@ -93,6 +94,7 @@ Quy tắc giọng:
 - Chèn 1 chi tiết bất ngờ THẬT để người xem "ồ".
 - Chốt bằng 1 câu đọng hoặc CTA nhẹ (follow để xem tiếp...).
 - Xưng hô (CHỐT): người dẫn xưng "chồng" — viết ĐẦY ĐỦ chữ "chồng", TUYỆT ĐỐI không viết tắt "ck" (voiceover đưa thẳng TTS, "ck" sẽ bị đọc thành "xê-ca"). HẠN CHẾ từ "vợ" — chỉ "mấy con vợ / mấy vợ" 1 lần ở mở đầu HOẶC CTA (vd "để chồng kể cho mấy con vợ nghe nha"), KHÔNG rải khắp câu.
+- NHẤT QUÁN xưng hô CẢ KỊCH BẢN (cực quan trọng): người dẫn LUÔN là "chồng", người xem LUÔN trong khung "vợ". TUYỆT ĐỐI KHÔNG chuyển sang gọi người xem là "bạn / các bạn / mọi người" giữa chừng — trộn "chồng/vợ" với "bạn" làm giọng gãy. Ngoài 1 lần "mấy con vợ", các câu còn lại NÓI TRỐNG (bỏ đại từ ngôi 2) + thán từ "nha/nè" (vd "dám thử là được nha", KHÔNG "bạn dám thử là được").
 - Thán từ duyên cho tự nhiên: "chời ơi", "nha", "à nha", "nói thật nha". Vẫn văn minh, lịch sự.
 
 Pattern text hook tham khảo (10+ mẫu):

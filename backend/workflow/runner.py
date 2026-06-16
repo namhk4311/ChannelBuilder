@@ -116,7 +116,9 @@ def _new_run(topic: str | None, library: str,
              "tool": s["tool"], "title": s["title"],
              "status": "pending", "started_at": None, "ended_at": None,
              "summary": None, "output": None, "error": None,
-             "data_source": None, "progress": None}
+             "data_source": None, "progress": None,
+             # True khi step được chạy lại (vd Viết kịch bản sửa theo feedback QC) → UI badge "Đã sửa lại".
+             "revised": False}
             for s in STEP_PLAN
         ],
     }
@@ -293,9 +295,9 @@ def _run_pipeline(run: dict) -> None:  # noqa: PLR0915 — pipeline tuần tự,
         _finish_step(run, s, "ok", {"chosen": best.get("title")}, f"Đã chọn: {best.get('title')}")
 
     # ---- 3 + 3a + 3b: [B] generate_script → [★] QC → quyết (auto tự sửa / human gate)
-    # Vòng lặp tự sửa: QC còn LỖI NẶNG (severity=error) → auto mode tự cho [B] viết
-    # lại (kèm feedback QC) tối đa CREATIVE_QC_MAX_RETRIES lần rồi dựng; confirm mode
-    # dừng ở gate cho human bấm "viết lại" / "tiếp tục" / "huỷ". Cảnh báo nhẹ KHÔNG chặn.
+    # AUTO: QC chấm 1 LẦN; nếu còn LỖI NẶNG (severity=error) → cho [B] viết lại ĐÚNG 1
+    # lần theo feedback rồi DỰNG LUÔN (KHÔNG QC lại lần 2). CONFIRM: dừng gate cho human
+    # bấm "viết lại" (QC lại mỗi lần, tối đa CREATIVE_QC_MAX_RETRIES) / "tiếp tục" / "huỷ".
     from agents.creative import generate_script
     from config import CREATIVE_QC_MAX_RETRIES, CREATIVE_QC_USE_LLM
     from .qc_script import run_script_qc
@@ -311,12 +313,20 @@ def _run_pipeline(run: dict) -> None:  # noqa: PLR0915 — pipeline tuần tự,
         if result.get("status") != "ok" or not package:
             return _fail_run(run, s, result.get("error") or "Không sinh được script", result)
         n_words = len((package.get("script") or "").split())
-        retry_note = f" • viết lại lần {attempt}" if attempt else ""
+        s["revised"] = attempt > 0          # badge "Đã sửa lại" cho bản viết lại theo QC
+        retry_note = " • đã sửa theo feedback QC" if attempt else ""
         _finish_step(run, s, "ok", result,
                      f"Chọn “{best.get('title')}” (est_fit {best.get('est_fit')}) • "
                      f"script {n_words} từ • {len(package.get('shot_list') or [])} câu • "
                      f"LLM MaaS sinh thật{retry_note}",
                      data_source="real")
+
+        # AUTO + đã viết lại 1 lần theo feedback QC → DỰNG LUÔN, không QC lại lần 2.
+        if not confirm_mode and attempt > 0:
+            s = _start_step(run, "script_approval")
+            _finish_step(run, s, "skipped", None,
+                         "Đã sửa theo feedback QC — dựng video luôn (không QC lại)")
+            break
 
         # 3a. QC kịch bản — bắt clip thiếu/coverage/cụt/hook + LLM chấm hook/mạch/khớp-ý.
         s = _start_step(run, "qc_script")
@@ -342,7 +352,9 @@ def _run_pipeline(run: dict) -> None:  # noqa: PLR0915 — pipeline tuần tự,
 
         # 3b. quyết định: auto tự sửa, hoặc dừng gate cho human.
         if not confirm_mode:
-            # AUTO: tự cho [B] viết lại nếu còn lỗi nặng + còn lượt; hết thì dựng.
+            # AUTO: còn lỗi nặng → cho [B] viết lại ĐÚNG 1 lần theo feedback (vòng kế tiếp
+            # sẽ dựng luôn ở nhánh attempt>0 phía trên, KHÔNG QC lại). CREATIVE_QC_MAX_RETRIES
+            # ở đây = công tắc bật/tắt tự sửa (0 = tắt → dựng thẳng dù có lỗi).
             if n_err > 0 and can_retry:
                 attempt += 1
                 qc_feedback = issues
@@ -351,7 +363,7 @@ def _run_pipeline(run: dict) -> None:  # noqa: PLR0915 — pipeline tuần tự,
             if verdict.get("verdict") == "pass":
                 note = "QC đạt — tự động dựng video"
             elif n_err:
-                note = f"QC còn {n_err} lỗi nặng sau {attempt} lần tự sửa — vẫn dựng (human xem lại sau)"
+                note = f"QC còn {n_err} lỗi nặng (đã tắt tự sửa) — vẫn dựng (human xem lại sau)"
             else:
                 note = "QC chỉ cảnh báo nhẹ — tự động dựng video"
             _finish_step(run, s, "skipped", None, note)

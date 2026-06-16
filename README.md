@@ -272,13 +272,16 @@ KHÔNG hard-block** — verdict chỉ là cảnh báo, human quyết retry ở g
   judge: `CREATIVE_QC_USE_LLM=false`.
 
 **Vòng lặp tự sửa (`qc_mode`, toggle "Cần xác nhận kịch bản" ở run-controls):**
-- **`auto` (default):** B → QC → nếu còn **lỗi nặng** (severity=error) thì AI tự cho
-  Creative viết lại (kèm warnings làm chỉ dẫn sửa) tối đa `CREATIVE_QC_MAX_RETRIES`
-  lần → rồi dựng. Không cần human. Cảnh báo nhẹ không chặn.
+- **`auto` (default):** B → QC (chấm **1 lần**) → nếu còn **lỗi nặng** (severity=error)
+  thì AI cho Creative viết lại **ĐÚNG 1 lần** theo feedback (errors trước, warnings sau)
+  → **dựng luôn, KHÔNG QC lại lần 2**. Không cần human. Cảnh báo nhẹ không chặn. Bước
+  "Viết kịch bản" gắn badge **"Đã sửa lại"** khi bản dựng là bản viết lại. Ở mode này
+  `CREATIVE_QC_MAX_RETRIES` = công tắc bật/tắt tự sửa (0 = tắt → dựng thẳng dù có lỗi).
 - **`confirm`:** B → QC → **dừng** ở gate; human bấm **Tiếp tục** / **Cho Creative
-  viết lại** (regenerate với feedback QC, còn lượt thì hiện nút) / **Huỷ**.
-- Feedback QC được nhồi vào prompt `generate_script(qc_feedback=...)` để bản viết lại
-  khắc phục đúng các lỗi. Cap `CREATIVE_QC_MAX_RETRIES` (default 2) chặn đốt quota.
+  viết lại** (regenerate với feedback QC + QC lại mỗi lần, tối đa `CREATIVE_QC_MAX_RETRIES`,
+  còn lượt thì hiện nút) / **Huỷ**.
+- Feedback QC được nhồi vào prompt `generate_script(qc_feedback=...)` (gom **lỗi nặng
+  lên trước**, cảnh báo sau) để bản viết lại khắc phục đúng các lỗi.
 
 Module: `backend/workflow/qc_script.py` (pure, stdlib-importable → unit-test trên
 python trần: `python3 backend/tests/test_qc_script.py`).

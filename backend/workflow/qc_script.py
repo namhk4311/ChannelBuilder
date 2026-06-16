@@ -36,8 +36,9 @@ log = logging.getLogger(__name__)
 list_all_clips_for_llm = None  # type: ignore[assignment]
 _chat = None  # type: ignore[assignment]
 
-# 6 type issue hợp lệ (khớp UI + plan). LLM trả type lạ → ép về "flow".
-_VALID_TYPES = {"clip_missing", "clip_coverage", "script_cut", "hook_weak", "flow", "clip_mismatch"}
+# type issue hợp lệ (khớp UI + plan). LLM trả type lạ → ép về "flow".
+_VALID_TYPES = {"clip_missing", "clip_coverage", "script_cut", "hook_weak",
+                "flow", "clip_mismatch", "address_inconsistent"}
 
 # Heuristic cụt-detection tiếng Việt.
 _SENTENCE_END = (".", "!", "?", "…")
@@ -47,6 +48,11 @@ _DANGLING_CONJ = {  # liên từ / giới từ treo cuối câu → câu cụt
 }
 _MIN_HOOK_WORDS = 3            # text_hook phải là mệnh đề
 _MIN_LAST_SENTENCE_WORDS = 3  # câu cuối script không cụt lủn
+
+# Persona kênh: người dẫn xưng "chồng", người xem trong khung "mấy con vợ".
+# Trộn sang gọi "bạn" giữa chừng = giọng không nhất quán (xem TONE trong prompts.py).
+_PERSONA_MARKERS = ("chồng", "mấy con vợ", "mấy vợ")
+_AUDIENCE_BAN_RE = re.compile(r"\bbạn\b")
 
 
 # ─── lazy binders (giữ module top stdlib-only) ──────────────────────────────
@@ -77,6 +83,21 @@ def _load_chat():
             log.warning("QC: không import được _chat (%s) → llm=skipped", e)
             return None
     return fn
+
+
+def _load_tone_context() -> str:
+    """BRAND_GUIDE + TONE của Creative — để judge chấm theo ĐÚNG persona kênh
+    (vd người dẫn xưng 'chồng', gọi 'mấy con vợ' là cố ý, KHÔNG phải lỗi).
+
+    Nhờ vậy QC = second-opinion CHUNG NGUỒN tone với [B] thay vì tone mặc định chung
+    chung. '' nếu import lỗi (prompts.py chỉ là data thuần → gần như luôn nạp được).
+    """
+    try:
+        from agents.creative.prompts import BRAND_GUIDE, TONE
+    except Exception as e:  # noqa: BLE001
+        log.warning("QC: không nạp được TONE/BRAND_GUIDE (%s) → judge dùng tone mặc định", e)
+        return ""
+    return BRAND_GUIDE + "\n\n" + TONE
 
 
 # ─── deterministic layer ─────────────────────────────────────────────────────
@@ -209,6 +230,28 @@ def _check_cut_off(script: Optional[str], text_hook: Optional[str]) -> list[dict
     return issues
 
 
+def _check_address_consistency(script: Optional[str], text_hook: Optional[str]) -> list[dict]:
+    """Bắt lỗi xưng hô KHÔNG nhất quán: kịch bản dùng persona 'chồng kể cho mấy con
+    vợ nghe' nhưng lại nhảy sang gọi người xem là 'bạn' giữa chừng (lỗi LLM hay mắc).
+
+    Chỉ soi khi persona đang active (có 'chồng'/'mấy con vợ') — script không dùng
+    persona thì bỏ qua (đó là vấn đề khác, không phải 'trộn'). Deterministic, 0 quota.
+    """
+    low = f"{text_hook or ''}\n{script or ''}".lower()
+    if not any(m in low for m in _PERSONA_MARKERS):
+        return []
+    hits = _AUDIENCE_BAN_RE.findall(low)
+    if not hits:
+        return []
+    return [{
+        "type": "address_inconsistent", "severity": "warning", "where": "xưng hô",
+        "detail": (f"Trộn xưng hô: kịch bản dùng persona 'chồng kể cho mấy con vợ nghe' "
+                   f"nhưng lại gọi người xem là 'bạn' ({len(hits)} lần) → giọng không nhất quán"),
+        "suggested_fix": ("Giữ MỘT cách xưng hô: gọi người xem là 'mấy con vợ / mấy vợ' "
+                          "(hoặc nói trống + thán từ 'nha/nè'), bỏ hết 'bạn / các bạn'"),
+    }]
+
+
 def _merge_base_warnings(base_warnings: Optional[list]) -> list[dict]:
     """Gộp warnings[] của validator [B] thành issues (CẤM → error, còn lại warning)."""
     out: list[dict] = []
@@ -226,15 +269,25 @@ def _merge_base_warnings(base_warnings: Optional[list]) -> list[dict]:
 
 _QC_SYSTEM_PROMPT = (
     "Bạn là biên tập viên QC khó tính của kênh TikTok 'VNG Insider — Đời sống ở VNG'. "
-    "Tone kênh: hài duyên, gần gũi, câu nào cũng có giá trị, KHÔNG quảng cáo lên gân. "
     "Soi kịch bản 40-55s TRƯỚC khi dựng video, chỉ dựa trên DỮ KIỆN được cung cấp "
     "(lời thoại + clip thật theo từng câu + lỗi máy đã phát hiện). KHÔNG bịa clip "
-    "không có trong danh sách. Chấm 3 trục: (1) hook 2-3s đầu có giữ chân không, "
+    "không có trong danh sách. Chấm 4 trục: (1) hook 2-3s đầu có giữ chân không, "
     "(2) mạch các câu có trôi/liền lạc không, (3) clip_tag/scene_hint có KHỚP ý câu "
-    "không (vd câu nói cà phê mà clip là phòng gym = lệch). "
+    "không (vd câu nói cà phê mà clip là phòng gym = lệch), (4) XƯNG HÔ có NHẤT QUÁN "
+    "theo persona không.\n"
+    "QUAN TRỌNG — TONE/PERSONA: kịch bản được VIẾT theo bộ quy tắc TONE & PERSONA "
+    "của kênh cung cấp ở cuối prompt này. Khi kịch bản TUÂN THỦ các quy tắc đó thì "
+    "ĐÚNG brand, TUYỆT ĐỐI KHÔNG tính là lỗi. Cụ thể: người dẫn cố ý xưng 'chồng' và "
+    "gọi người xem là 'mấy con vợ' (chất hài 'chồng kể cho vợ nghe'), dùng thán từ "
+    "'nha / chời ơi / à nha' — đây là PERSONA CHỦ ĐÍCH, KHÔNG được đề xuất bỏ/đổi sang "
+    "'tui / các bạn'. Chỉ báo 'hook_weak' khi hook thật sự nhạt, không giật, không gợi "
+    "tò mò THEO tone đó — KHÔNG vì cách xưng hô.\n"
+    "Trục (4) — báo 'address_inconsistent' khi kịch bản TRỘN xưng hô: đã dùng persona "
+    "'chồng/mấy con vợ' nhưng lại nhảy sang gọi người xem là 'bạn / các bạn / mọi người' "
+    "giữa chừng → giọng gãy, không nhất quán. Phải giữ MỘT khung xưng hô xuyên suốt.\n"
     "CHỈ trả JSON đúng dạng, KHÔNG văn xuôi:\n"
-    '{"issues":[{"type":"hook_weak|flow|clip_mismatch","severity":"warning|error",'
-    '"where":"câu i / hook","detail":"...","suggested_fix":"..."}]}\n'
+    '{"issues":[{"type":"hook_weak|flow|clip_mismatch|address_inconsistent",'
+    '"severity":"warning|error","where":"câu i / hook","detail":"...","suggested_fix":"..."}]}\n'
     "Không có vấn đề → {\"issues\":[]}. Trích dẫn câu/tag cụ thể trong 'where'/'detail'."
 )
 
@@ -298,8 +351,15 @@ def _llm_judge(package: dict, clip_meta: list[dict], det_issues: list[dict]) -> 
         model = CREATIVE_QC_MODEL
     except Exception:  # noqa: BLE001 — thiếu config (vd test python trần) → để _chat tự default
         model = None
+    # Ground judge bằng CHÍNH bộ tone/persona [B] đã viết theo → khỏi phạt nhầm cách
+    # xưng hô 'chồng/vợ' cố ý. Thiếu prompts → '' → chấm bằng tone mặc định trong system.
+    tone = _load_tone_context()
+    system = _QC_SYSTEM_PROMPT
+    if tone:
+        system += ("\n\n=== TONE & PERSONA CHUẨN CỦA KÊNH (kịch bản ĐƯỢC VIẾT theo đây — "
+                   "tuân thủ = ĐÚNG brand, KHÔNG tính lỗi) ===\n" + tone)
     try:
-        raw = chat(_QC_SYSTEM_PROMPT, _build_judge_prompt(package, clip_meta, det_issues),
+        raw = chat(system, _build_judge_prompt(package, clip_meta, det_issues),
                    temperature=0.3, model=model)
     except Exception as e:  # noqa: BLE001 — 429/network/timeout → llm=skipped
         log.warning("QC LLM judge lỗi (%s) → llm=skipped", e)
@@ -327,6 +387,7 @@ def run_script_qc(package: dict, library: str,
     try:
         det_issues, clip_meta = _deterministic_checks(pkg, library)
         det_issues += _check_cut_off(pkg.get("script"), pkg.get("text_hook"))
+        det_issues += _check_address_consistency(pkg.get("script"), pkg.get("text_hook"))
         det_issues += _merge_base_warnings(base_warnings)
         det_status = "warn" if det_issues else "pass"
     except Exception as e:  # noqa: BLE001 — deterministic không được giết pipeline

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Timer } from 'lucide-react'
+import { PencilLine, Timer } from 'lucide-react'
 import {
   Accordion,
   AccordionContent,
@@ -159,6 +159,14 @@ export function RunStepList({ steps, ordinal }: { steps: RunStep[]; ordinal?: bo
                 <div className="flex items-center gap-2 shrink-0">
                   <StepTimer step={step} />
                   <StepStatusChip status={step.status} />
+                  {step.revised && (
+                    <span
+                      className="inline-flex items-center gap-1 rounded-full bg-violet-500/10 px-2.5 py-0.5 text-xs font-medium text-violet-600 dark:text-violet-400 whitespace-nowrap"
+                      title="Kịch bản đã được viết lại theo feedback QC"
+                    >
+                      <PencilLine className="size-3" /> Đã sửa lại
+                    </span>
+                  )}
                 </div>
               </div>
             </AccordionTrigger>

@@ -57,6 +57,8 @@ export interface RunStep {
   data_source: StepDataSource | null
   /** Producer job 6 bước có progress % thật; step khác = null. */
   progress: number | null
+  /** True khi step được chạy lại (Viết kịch bản sửa theo feedback QC) → badge "Đã sửa lại". */
+  revised?: boolean
 }
 
 /** Verdict QC kịch bản (bước qc_script + đính kèm script gate). Xem backend/workflow/qc_script.py. */
@@ -69,6 +71,7 @@ export type QcIssueType =
   | 'hook_weak'
   | 'flow'
   | 'clip_mismatch'
+  | 'address_inconsistent'
 
 export interface QcIssue {
   type: QcIssueType

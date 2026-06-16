@@ -16,6 +16,7 @@ const TYPE_LABELS: Record<QcIssueType, string> = {
   hook_weak: 'Hook yếu',
   flow: 'Mạch / nội dung',
   clip_mismatch: 'Clip lệch ý câu',
+  address_inconsistent: 'Xưng hô không nhất quán',
 }
 
 function checkLabel(s?: QcCheckStatus): string {
