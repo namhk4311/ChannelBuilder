@@ -65,6 +65,9 @@ def _new_spec() -> dict:
         "visual_style": None, "brand": None,
         # music_track_id=None mơ hồ (chưa hỏi vs chọn 'không nhạc') → cờ riêng để biết đã chọn.
         "music_decided": False,
+        # publish_mode mặc định 'review_publish' (non-null) → cần cờ riêng để biết user ĐÃ chọn
+        # qua chip chưa. schedule_time_decided: đã hỏi giờ hẹn (khi publish_mode='schedule') chưa.
+        "publish_decided": False, "schedule_time_decided": False,
     }
 
 
@@ -135,6 +138,11 @@ def _options_for_field(field: Optional[str], libs: list[dict], music: list[dict]
         opts = scene_options((spec or {}).get("visual_style"))
         return [{"value": n, "label": f"{n} cảnh",
                  "hint": "1 banner" if n == 1 else f"{n} cảnh + chuyển cảnh"} for n in opts]
+    if field == "publish_mode":
+        return [
+            {"value": "review_publish", "label": "🚀 Đăng ngay", "hint": "duyệt xong đăng liền"},
+            {"value": "schedule", "label": "🗓️ Lên lịch", "hint": "hẹn giờ, tự đăng tới giờ"},
+        ]
     if field == "confirm":
         return [{"value": "run", "label": "🚀 Tạo video luôn"},
                 {"value": "edit", "label": "✏️ Chỉnh thông tin"}]
@@ -142,7 +150,18 @@ def _options_for_field(field: Optional[str], libs: list[dict], music: list[dict]
 
 
 # Các field có CHIP (options từ backend) — dùng để đảm bảo chip không bị mất.
-_CHIP_FIELDS = {"mode", "visual_style", "brand", "n_scenes", "library", "music_track_id", "confirm"}
+_CHIP_FIELDS = {"mode", "visual_style", "brand", "n_scenes", "library", "music_track_id",
+                "publish_mode", "confirm"}
+
+
+def _publish_awaited(spec: dict) -> Optional[str]:
+    """Đuôi gom CHUNG cho cả vlog & info: chế độ đăng (chip) → giờ hẹn (text, nếu lên lịch).
+    Trả None khi đã chốt cách đăng (review_publish, hoặc schedule đã hỏi giờ)."""
+    if not spec.get("publish_decided"):
+        return "publish_mode"
+    if spec.get("publish_mode") == "schedule" and not spec.get("schedule_time_decided"):
+        return "scheduled_for"   # TEXT tự do — LLM parse "9h sáng mai" → ISO
+    return None
 
 
 def _awaited_field(spec: dict) -> Optional[str]:
@@ -163,8 +182,8 @@ def _awaited_field(spec: dict) -> Optional[str]:
             return "n_scenes"
         if not spec.get("music_decided"):
             return "music_track_id"
-        return None
-    # vlog: topic (text, HỎI ĐẦU TIÊN) → library (chip bắt buộc) → nhạc → xác nhận.
+        return _publish_awaited(spec)   # chế độ đăng → giờ hẹn → xác nhận
+    # vlog: topic (text, HỎI ĐẦU TIÊN) → library (chip bắt buộc) → nhạc → cách đăng → xác nhận.
     # topic phải gom TRƯỚC: scout/generate_ideas bám topic → ý tưởng đúng chủ đề.
     if len((spec.get("topic") or "").strip()) < 2:
         return "topic"   # TEXT tự do — không phải chip (LLM dẫn prose)
@@ -172,7 +191,7 @@ def _awaited_field(spec: dict) -> Optional[str]:
         return "library"
     if not spec.get("music_decided"):
         return "music_track_id"
-    return None
+    return _publish_awaited(spec)
 
 
 def _next_chip_field(spec: dict) -> Optional[str]:
@@ -244,7 +263,14 @@ def _apply_chip_answer(conv: dict, text: str, libs: list[dict], music: list[dict
             spec[f] = val
             if f == "music_track_id":
                 spec["music_decided"] = True   # gồm cả 'Không nhạc' (val=None)
+            elif f == "publish_mode":
+                spec["publish_decided"] = True   # 'Đăng ngay' → khỏi hỏi giờ; 'Lên lịch' → hỏi giờ
             log.info("conductor · chip → spec[%s]=%r", f, val)
+    elif f == "scheduled_for" and (text or "").strip():
+        # Đang chờ giờ hẹn (publish_mode=schedule) → đánh dấu đã hỏi. ISO giờ cụ thể do LLM
+        # parse vào spec_patch.scheduled_for (vd "9h sáng mai" → ISO); không parse được → slot mặc định.
+        spec["schedule_time_decided"] = True
+        log.info("conductor · text → schedule_time_decided (raw=%r)", text.strip()[:40])
     elif f == "topic" and len((text or "").strip()) >= 2:
         # Đang chờ chủ đề (vlog) → câu user CHÍNH LÀ topic (LLM hay quên ghi spec_patch.topic
         # → topic kẹt null, đẩy thẳng tới chip xác nhận mà chưa hỏi chủ đề bao giờ).
@@ -302,8 +328,253 @@ _VIDEO_STATUS_NOTE = {
 }
 
 
-def _context_block(spec: dict, libs: list[dict], music: list[dict], video_status: str = "none") -> str:
-    """Snapshot động bơm vào cuối system prompt mỗi lượt — option hợp lệ + spec + trạng thái video."""
+# ----------------------------------------------------------------- trend Q&A (Scout)
+# Detector câu hỏi xu hướng → quyết khi nào nạp digest + trả bảng trend. Loại trừ câu gom
+# spec ("mấy cảnh") để không bắt nhầm giữa luồng tạo video.
+_TREND_KW = (
+    "trend", "xu hướng", "xu huong", "format", "hook", "chủ đề", "chu de", "đang hot", "dang hot",
+    "thịnh hành", "thinh hanh", "đang thịnh", "viral", "nên làm", "nen lam", "kiểu video", "kieu video",
+    "độ dài", "do dai", "ngưỡng", "nguong", "retention", "scout", "đang chạy nhất", "ăn nhất",
+)
+_TREND_NEG = ("mấy cảnh", "may canh", "bao nhiêu cảnh", "số cảnh", "so canh")
+
+
+def _is_trend_question(text: str) -> bool:
+    """Câu hỏi về xu hướng/Scout (format/hook/chủ đề/độ dài/ngưỡng…)?"""
+    t = f" {(text or '').strip().lower()} "
+    if any(neg in t for neg in _TREND_NEG):
+        return False
+    return any(kw in t for kw in _TREND_KW)
+
+
+def _run_trend_digest(conv: dict) -> Optional[dict]:
+    """Digest trend từ run hiện tại — CHỈ run vlog mới có (scan_trends thật). Info → None."""
+    rid = conv.get("run_id")
+    if not rid:
+        return None
+    try:
+        from workflow.runner import get_run
+        run = get_run(rid)
+    except Exception:  # noqa: BLE001
+        run = None
+    if not run:
+        return None
+    step = next((s for s in run.get("steps", []) if s.get("id") == "scan_trends"), None)
+    out = (step or {}).get("output") or {}
+    if out.get("digest"):
+        return {"digest": out["digest"], "source": out.get("source") or "seed"}
+    return None
+
+
+def _get_trend_digest(conv: dict) -> Optional[dict]:
+    """Ưu tiên digest run hiện tại (vlog); fallback cache đã quét trong cuộc chat."""
+    return _run_trend_digest(conv) or conv.get("trend_digest")
+
+
+def _fetch_trend_digest(conv: dict) -> Optional[dict]:
+    """Quét NHANH Scout (dataset seed, tức thì — KHÔNG network/LLM) khi chưa có digest. Cache vào conv."""
+    try:
+        from agents.scout import run_scout
+        res = run_scout(top_n=3, prefer_live=False)
+    except Exception as e:  # noqa: BLE001
+        log.warning("conductor · run_scout (chat) lỗi: %s", e)
+        return None
+    if res.get("status") != "ok" or not res.get("digest"):
+        return None
+    payload = {"digest": res["digest"], "source": res.get("source") or "seed"}
+    conv["trend_digest"] = payload
+    log.info("conductor · quét trend (chat, seed) → %d video", res["digest"].get("so_video_quet", 0))
+    return payload
+
+
+def _trend_block(payload: Optional[dict]) -> str:
+    """Format digest gọn để bơm vào system prompt — LLM trả lời câu hỏi trend DỰA TRÊN đây."""
+    if not payload:
+        return ""
+    d = payload.get("digest") or {}
+    top = d.get("top_format") or []
+    top_line = ", ".join(f"{f.get('format')} ({f.get('so_video')} video)" for f in top[:3]) or "—"
+    hooks = ", ".join(d.get("hook_pattern_thang") or []) or "—"
+    topics = ", ".join(d.get("chu_de_hot") or []) or "—"
+    nguong = (d.get("benchmark_khoi_tao") or {}).get("nguong")
+    src = "TikTok thật (LLM)" if payload.get("source") == "llm" else "dataset mẫu"
+    return (
+        "\n\n# DỮ LIỆU TREND (Scout) — trả lời câu hỏi xu hướng DỰA TRÊN đây, KHÔNG bịa số:\n"
+        f"- Nguồn: {src} • {d.get('so_video_quet', 0)} video • metric: {d.get('metric')}\n"
+        f"- Format thắng: {top_line}\n"
+        f"- Độ dài tối ưu: {d.get('do_dai_toi_uu') or '—'}\n"
+        f"- Hook ăn khách: {hooks}\n"
+        f"- Chủ đề hot: {topics}\n"
+        f"- Ngưỡng ({d.get('metric')}): {nguong if nguong is not None else '—'}\n"
+        f"- Format yếu cần tránh: {d.get('format_yeu') or '—'}"
+    )
+
+
+# ----------------------------------------------------------------- Analyst Q&A (hiệu suất video đã đăng)
+# Detector câu hỏi hiệu suất/phân tích → nạp digest Analyst (insight + bảng video đã chấm).
+_ANALYST_KW = (
+    "performance", "hiệu suất", "hieu suat", "hiệu quả", "hieu qua", "kết quả", "ket qua",
+    "phân tích", "phan tich", "analyst", "metric", "số liệu", "so lieu", "views", "lượt xem",
+    "luot xem", "retention", "giữ chân", "giu chan", "ăn nhất", "an nhat", "thống kê", "thong ke",
+    "scale", "insight", "đánh giá video", "danh gia video", "video đã đăng", "video da dang",
+    "đã đăng thế nào", "da dang the nao", "video nào tốt", "video nao tot",
+)
+
+
+def _is_analyst_question(text: str) -> bool:
+    """Câu hỏi về hiệu suất / phân tích video đã đăng (Analyst)?"""
+    t = f" {(text or '').strip().lower()} "
+    return any(kw in t for kw in _ANALYST_KW)
+
+
+def _fetch_analyst_digest(conv: dict) -> Optional[dict]:
+    """Chấm batch Analyst (thuần Python, tức thì — KHÔNG network/LLM) → insight + bảng video.
+    Cache vào conv (best-effort; conv chỉ persist spec/messages nên lượt sau có thể nạp lại)."""
+    cached = conv.get("analyst_digest")
+    if cached:
+        return cached
+    try:
+        from agents.analyst import run_analyst
+        res = run_analyst()   # batch dummy mặc định
+    except Exception as e:  # noqa: BLE001
+        log.warning("conductor · run_analyst (chat) lỗi: %s", e)
+        return None
+    if res.get("status") != "ok":
+        return None
+    payload = {
+        "insight": res.get("insight_digest") or {},
+        "videos": res.get("videos") or [],
+        "batch": res.get("batch"),
+        "scale_ids": res.get("scale_ids") or [],
+    }
+    conv["analyst_digest"] = payload
+    log.info("conductor · chấm Analyst (chat) → %d video", len(payload["videos"]))
+    return payload
+
+
+def _analyst_block(payload: Optional[dict]) -> str:
+    """Format digest Analyst gọn để bơm vào system prompt — LLM trả lời DỰA TRÊN đây, không bịa."""
+    if not payload:
+        return ""
+    ins = payload.get("insight") or {}
+    vids = payload.get("videos") or []
+    n_scale = sum(1 for v in vids if v.get("label") == "SCALE")
+    n_monitor = sum(1 for v in vids if v.get("label") == "MONITOR")
+    n_kill = sum(1 for v in vids if v.get("label") == "KILL")
+    thang = ins.get("thang") or {}
+    thang_hook = ", ".join(thang.get("hook_type") or []) or "—"
+    thua_hook = ", ".join((ins.get("thua") or {}).get("hook_type") or []) or "—"
+    return (
+        "\n\n# DỮ LIỆU ANALYST (hiệu suất video đã đăng) — trả lời câu hỏi hiệu suất DỰA TRÊN đây, KHÔNG bịa số:\n"
+        f"- Lô: {payload.get('batch') or '—'} • {len(vids)} video • SCALE {n_scale} / MONITOR {n_monitor} / KILL {n_kill}\n"
+        f"- Hook thắng: {thang_hook}\n"
+        f"- Độ dài tốt: {thang.get('do_dai') or '—'}\n"
+        f"- Hook thua (nên tránh): {thua_hook}\n"
+        f"- Đề xuất vòng sau: {ins.get('de_xuat_vong_sau') or '—'}"
+    )
+
+
+# ----------------------------------------------------------------- Schedule Q&A (video chờ đăng)
+# Detector câu hỏi về lịch đăng / video đang chờ → list bảng (giống tab Lịch đăng).
+_SCHEDULE_KW = (
+    "chờ đăng", "cho dang", "đang chờ", "dang cho", "lịch đăng", "lich dang", "sắp đăng",
+    "sap dang", "hẹn đăng", "hen dang", "chưa đăng", "chua dang", "lịch hẹn", "lich hen",
+    "queue", "hàng chờ", "hang cho", "pending", "scheduled", "đăng hôm nay", "dang hom nay",
+)
+_TODAY_KW = ("hôm nay", "hom nay", "today", "bữa nay", "bua nay", "ngày nay", "ngay nay")
+
+
+def _is_schedule_question(text: str) -> bool:
+    """Câu hỏi về lịch đăng / video đang chờ đăng?"""
+    t = f" {(text or '').strip().lower()} "
+    return any(kw in t for kw in _SCHEDULE_KW)
+
+
+def _mentions_today(text: str) -> bool:
+    t = f" {(text or '').strip().lower()} "
+    return any(kw in t for kw in _TODAY_KW)
+
+
+def _today_window_utc():
+    """Mốc đầu/cuối ngày hôm nay theo SCHEDULE_TZ, quy về UTC (so với scheduled_for lưu UTC)."""
+    from datetime import datetime as _dt, time as _time, timezone as _tz
+    from zoneinfo import ZoneInfo
+    from config import SCHEDULE_TZ
+    tz = ZoneInfo(SCHEDULE_TZ)
+    today = _dt.now(tz).date()
+    start = _dt.combine(today, _time.min, tzinfo=tz).astimezone(_tz.utc)
+    end = _dt.combine(today, _time.max, tzinfo=tz).astimezone(_tz.utc)
+    return start, end
+
+
+def _iso(dt: Any) -> Optional[str]:
+    if dt is None:
+        return None
+    if isinstance(dt, str):
+        return dt
+    try:
+        return dt.isoformat()
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def _fetch_schedule(today_only: bool) -> Optional[dict]:
+    """Liệt kê video đang chờ đăng (status pending/publishing). today_only → lọc hẹn trong hôm nay."""
+    try:
+        from agents.publisher import scheduled_posts
+        rows = scheduled_posts.list_posts(limit=200)
+    except Exception as e:  # noqa: BLE001
+        log.warning("conductor · list_posts (chat) lỗi: %s", e)
+        return None
+    pending = [r for r in rows if r.get("status") in ("pending", "publishing")]
+    if today_only:
+        from datetime import timezone as _tz
+        start, end = _today_window_utc()
+
+        def _in_today(r: dict) -> bool:
+            sf = r.get("scheduled_for")
+            if sf is None or isinstance(sf, str):
+                return False
+            if sf.tzinfo is None:
+                sf = sf.replace(tzinfo=_tz.utc)
+            return start <= sf <= end
+
+        pending = [r for r in pending if _in_today(r)]
+    posts = [{
+        "id": r.get("id"),
+        "caption": r.get("caption"),
+        "library": r.get("library"),
+        "trigger": r.get("trigger"),
+        "status": r.get("status"),
+        "scheduled_for": _iso(r.get("scheduled_for")),
+        "published_at": _iso(r.get("published_at")),
+    } for r in pending]
+    return {"posts": posts, "today_only": today_only, "count": len(posts)}
+
+
+def _schedule_block(payload: Optional[dict]) -> str:
+    """Format danh sách lịch đăng gọn để bơm vào system prompt — LLM trả lời DỰA TRÊN đây."""
+    if not payload:
+        return ""
+    posts = payload.get("posts") or []
+    scope = "hẹn đăng hôm nay" if payload.get("today_only") else "đang chờ đăng"
+    if not posts:
+        return f"\n\n# DỮ LIỆU LỊCH ĐĂNG: Không có video nào {scope}."
+    lines = "\n".join(
+        f"- #{p['id']} • {p.get('scheduled_for') or '—'} • "
+        f"{(p.get('caption') or '')[:50]} • {p.get('status')}"
+        for p in posts[:10]
+    )
+    return (
+        f"\n\n# DỮ LIỆU LỊCH ĐĂNG (video {scope}) — trả lời DỰA TRÊN đây, KHÔNG bịa:\n"
+        f"- Phạm vi: {scope} • {len(posts)} video\n{lines}"
+    )
+
+
+def _context_block(spec: dict, libs: list[dict], music: list[dict], video_status: str = "none",
+                   trend: Optional[dict] = None, analyst: Optional[dict] = None,
+                   schedule: Optional[dict] = None) -> str:
+    """Snapshot động bơm vào cuối system prompt mỗi lượt — option hợp lệ + spec + trạng thái video + trend."""
     lib_lines = "\n".join(f"- {o['value']} — \"{o['label']}\" ({o['hint']})" for o in libs) or "- (chưa có thư viện nào)"
     music_lines = "\n".join(
         f"- {('null' if o['value'] is None else o['value'])} — \"{o['label']}\" {('· ' + o['hint']) if o.get('hint') else ''}"
@@ -319,13 +590,15 @@ def _context_block(spec: dict, libs: list[dict], music: list[dict], video_status
         f"Spec đã chốt: {json.dumps(spec, ensure_ascii=False)}\n"
         f"Còn thiếu bắt buộc: {', '.join(missing) if missing else '(đủ — có thể xác nhận chạy)'}\n"
         f"TRẠNG THÁI VIDEO: {video_status} → {_VIDEO_STATUS_NOTE.get(video_status, '')}"
+        + _trend_block(trend) + _analyst_block(analyst) + _schedule_block(schedule)
     )
 
 
 def _llm_raw(spec: dict, messages: list[dict], libs: list[dict], music: list[dict],
-             video_status: str = "none") -> str:
+             video_status: str = "none", trend: Optional[dict] = None,
+             analyst: Optional[dict] = None, schedule: Optional[dict] = None) -> str:
     """Gọi MaaS non-stream, trả raw text. Fallback content rỗng → reasoning_content."""
-    system = SYSTEM_CONDUCTOR + _context_block(spec, libs, music, video_status)
+    system = SYSTEM_CONDUCTOR + _context_block(spec, libs, music, video_status, trend, analyst, schedule)
     # Chỉ gửi K message gần nhất — chống phình token (DB vẫn giữ full).
     recent = messages[-_LLM_HISTORY_WINDOW:]
     payload = [{"role": "system", "content": system}, *recent]
@@ -670,9 +943,21 @@ def send_message(conv_id: str, text: str) -> Optional[dict]:
     # LLM vẫn chạy để sinh reply + hiểu câu trả lời tự do.
     _apply_chip_answer(conv, text, libs, music)
 
+    # Trend digest: ưu tiên run hiện tại (vlog); chưa có + user hỏi xu hướng → quét seed tức thì.
+    # Bơm vào context để LLM trả lời câu hỏi trend grounded (không bịa).
+    trend = _get_trend_digest(conv)
+    if trend is None and _is_trend_question(text):
+        trend = _fetch_trend_digest(conv)
+
+    # Analyst (hiệu suất video đã đăng) + Schedule (video chờ đăng): nạp khi user hỏi → vừa bơm
+    # vào context cho LLM trả lời grounded, vừa kèm payload để FE render bảng (insight / lịch).
+    analyst = _fetch_analyst_digest(conv) if _is_analyst_question(text) else None
+    schedule = _fetch_schedule(_mentions_today(text)) if _is_schedule_question(text) else None
+
     # --- gọi LLM (không bao giờ để exception làm sập 1 lượt chat) -----------
     try:
-        raw = _llm_raw(conv["spec"], conv["messages"], libs, music, _video_status(conv))
+        raw = _llm_raw(conv["spec"], conv["messages"], libs, music, _video_status(conv),
+                       trend, analyst, schedule)
         env = _parse_envelope(raw)
     except Exception as e:  # noqa: BLE001 — 429 / network / gateway
         log.exception("conductor · LLM lỗi: %s", e)
@@ -741,6 +1026,15 @@ def send_message(conv_id: str, text: str) -> Optional[dict]:
                     ui_options = _options_for_field("music_track_id", libs, music, spec)
                     if not reply:
                         reply = "Chọn nhạc nền nhé (hoặc không nhạc cũng được)."
+                elif not spec.get("publish_decided"):
+                    action, ui_kind, field = "present_choices", "choices", "publish_mode"
+                    ui_options = _options_for_field("publish_mode", libs, music, spec)
+                    if not reply:
+                        reply = "Bạn muốn đăng video thế nào — đăng ngay sau duyệt hay lên lịch?"
+                elif spec.get("publish_mode") == "schedule" and not spec.get("schedule_time_decided"):
+                    action, ui_kind, field = "ask", "ask", "scheduled_for"
+                    if not reply:
+                        reply = "Bạn muốn hẹn đăng vào lúc nào? (vd “9h sáng mai”, “20h tối nay”)"
                 else:
                     lib = spec.get("library") or (usable[0]["value"] if usable else "vng_insider")
                     run = start_run(
@@ -772,6 +1066,15 @@ def send_message(conv_id: str, text: str) -> Optional[dict]:
                     ui_options = _options_for_field("music_track_id", libs, music, spec)
                     if not reply:
                         reply = "Thêm nhạc nền cho video không? (hoặc chọn không nhạc)"
+                elif not spec.get("publish_decided"):
+                    action, ui_kind, field = "present_choices", "choices", "publish_mode"
+                    ui_options = _options_for_field("publish_mode", libs, music, spec)
+                    if not reply:
+                        reply = "Bạn muốn đăng video thế nào — đăng ngay sau duyệt hay lên lịch?"
+                elif spec.get("publish_mode") == "schedule" and not spec.get("schedule_time_decided"):
+                    action, ui_kind, field = "ask", "ask", "scheduled_for"
+                    if not reply:
+                        reply = "Bạn muốn hẹn đăng vào lúc nào? (vd “9h sáng mai”, “20h tối nay”)"
                 else:
                     run = start_run(
                         topic=spec.get("topic"), library=lib,
@@ -826,10 +1129,27 @@ def send_message(conv_id: str, text: str) -> Optional[dict]:
         ui_kind = "choices"
         ui_options = _options_for_field(field, libs, music, conv["spec"]) or env.get("options") or []
 
+    # --- thẻ trả lời chuyên biệt (grounded, KHÔNG ép chip): lịch đăng > hiệu suất > xu hướng.
+    # Mỗi câu chỉ hiện 1 thẻ; ưu tiên schedule (cụ thể nhất) rồi analyst rồi trend. Chỉ hiện khi
+    # đã nạp được data tương ứng; thiếu thì để LLM nói thật (chưa lấy được). Bắt cả khi LLM trả
+    # action chuyên biệt LẪN khi LLM trả 'ask'/chitchat mà detector keyword khớp.
+    trend_payload = analyst_payload = schedule_payload = None
+    _CARD_ACTS = ("answer_trend", "answer_analyst", "answer_schedule")
+    if schedule is not None and (action == "answer_schedule"
+                                 or (action in ("chitchat", "ask") and _is_schedule_question(text))):
+        ui_kind, field, schedule_payload = "schedule", None, schedule
+    elif analyst is not None and (action == "answer_analyst"
+                                  or (action in ("chitchat", "ask") and _is_analyst_question(text))):
+        ui_kind, field, analyst_payload = "analyst", None, analyst
+    elif trend is not None and (action == "answer_trend"
+                                or (action in ("chitchat", "ask") and _is_trend_question(text))):
+        ui_kind, field, trend_payload = "trend", None, trend
+
     # --- ĐẢM BẢO CHIP: backend tự đính chip cho bước chip kế tiếp dù LLM trả 'ask'/chitchat
-    # /thiếu options/parse-fallback (mất field). KHÔNG ép khi đang start/decide hoặc khi bước
-    # kế là text tự do. LLM vẫn sinh reply + hiểu câu trả lời tự do như cũ.
-    if action not in ("start_pipeline", "decide_publish"):
+    # /thiếu options/parse-fallback (mất field). KHÔNG ép khi đang start/decide hoặc đang trả
+    # 1 thẻ chuyên biệt (trend/analyst/schedule). LLM vẫn sinh reply + hiểu câu trả lời tự do.
+    if (action not in ("start_pipeline", "decide_publish", *_CARD_ACTS)
+            and ui_kind not in ("trend", "analyst", "schedule")):
         nf = _next_chip_field(conv["spec"])
         chosen = nf or (field if field in _CHIP_FIELDS else None)
         if not chosen and _confirm_ready(conv):
@@ -845,7 +1165,10 @@ def send_message(conv_id: str, text: str) -> Optional[dict]:
     first_user = next((m["content"] for m in conv["messages"] if m["role"] == "user"), "")
     _set_title(conv, first_user)
     store.save(conv)
-    return _public(store.get(conv_id), ui={"kind": ui_kind, "field": field, "options": ui_options})
+    return _public(store.get(conv_id),
+                   ui={"kind": ui_kind, "field": field, "options": ui_options,
+                       "trend": trend_payload, "analyst": analyst_payload,
+                       "schedule": schedule_payload})
 
 
 # ----------------------------------------------------------------- serialize

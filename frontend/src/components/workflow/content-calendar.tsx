@@ -13,37 +13,8 @@ import {
 import { Skeleton } from '@/components/ui/skeleton'
 import { EmptyState } from '@/components/common/empty-state'
 import { cn } from '@/lib/utils'
-import type { SchedulePostStatus } from '@/api/publisher'
+import { SCHEDULE_STATUS_BADGE, fmtScheduleTime } from '@/lib/schedule-format'
 import { useCancelSchedule, useRunScheduleNow, useSchedule } from '@/hooks/use-publisher'
-
-const STATUS_BADGE: Record<SchedulePostStatus, { label: string; className: string }> = {
-  pending: { label: 'Chờ đăng', className: 'bg-blue-500/10 text-blue-600 dark:text-blue-400' },
-  publishing: { label: 'Đang đăng', className: 'bg-blue-500/10 text-blue-600 dark:text-blue-400' },
-  published: {
-    label: 'Đã đăng',
-    className: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
-  },
-  failed: { label: 'Lỗi', className: 'bg-red-500/10 text-red-600 dark:text-red-400' },
-  skipped_dup: { label: 'Trùng', className: 'bg-amber-500/10 text-amber-600 dark:text-amber-400' },
-  skipped_limit: {
-    label: 'Quá giới hạn',
-    className: 'bg-amber-500/10 text-amber-600 dark:text-amber-400',
-  },
-  blocked_guardrail: {
-    label: 'Chặn (guardrail)',
-    className: 'bg-red-500/10 text-red-600 dark:text-red-400',
-  },
-  cancelled: { label: 'Đã huỷ', className: 'bg-muted text-muted-foreground' },
-}
-
-const FMT = new Intl.DateTimeFormat('vi-VN', {
-  timeZone: 'Asia/Saigon',
-  day: '2-digit',
-  month: '2-digit',
-  hour: '2-digit',
-  minute: '2-digit',
-})
-const fmtTime = (iso: string | null) => (iso ? FMT.format(new Date(iso)) : '—')
 
 /**
  * Content Calendar — bảng bài đã/đang/sẽ đăng (đọc từ scheduled_posts). Poll 5s
@@ -111,11 +82,11 @@ export function ContentCalendar() {
             </TableHeader>
             <TableBody>
               {posts.map((p) => {
-                const badge = STATUS_BADGE[p.status] ?? STATUS_BADGE.pending
+                const badge = SCHEDULE_STATUS_BADGE[p.status] ?? SCHEDULE_STATUS_BADGE.pending
                 return (
                   <TableRow key={p.id}>
                     <TableCell className="whitespace-nowrap">
-                      {fmtTime(p.scheduled_for ?? p.published_at)}
+                      {fmtScheduleTime(p.scheduled_for ?? p.published_at)}
                     </TableCell>
                     <TableCell className="max-w-xs truncate" title={p.caption}>
                       {p.caption}

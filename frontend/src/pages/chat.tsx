@@ -21,6 +21,9 @@ import {
 import { useChatStore } from '@/stores/chat-store'
 import { DirectorAvatar, MessageBubble } from '@/components/chat/message-bubble'
 import { OptionChips } from '@/components/chat/option-chips'
+import { TrendCard } from '@/components/chat/trend-card'
+import { AnalystCard } from '@/components/chat/analyst-card'
+import { ScheduleCard } from '@/components/chat/schedule-card'
 import { HistorySidebar } from '@/components/chat/history-sidebar'
 import { WorkflowPanel } from '@/components/chat/workflow-panel'
 import { IdeaGate } from '@/components/chat/idea-gate'
@@ -96,6 +99,9 @@ export default function ChatPage() {
   const messages = data?.messages ?? []
   const ui = data?.ui
   const showChips = ui?.kind === 'choices' && (ui.options?.length ?? 0) > 0 && !send.isPending
+  const showTrend = ui?.kind === 'trend' && !!ui.trend && !send.isPending
+  const showAnalyst = ui?.kind === 'analyst' && !!ui.analyst && !send.isPending
+  const showSchedule = ui?.kind === 'schedule' && !!ui.schedule && !send.isPending
   const showStarters = messages.length <= 1 && !data?.run_id && !send.isPending
   const runData = data?.run_id ? run.data : undefined
   // Pipeline đang xử lý (chưa tới gate / chưa xong) → khoá composer + nút vuông đỏ.
@@ -213,6 +219,12 @@ export default function ChatPage() {
               {showChips && (
                 <OptionChips options={ui!.options} onPick={onSend} disabled={send.isPending} />
               )}
+
+              {showTrend && <TrendCard trend={ui!.trend!} />}
+
+              {showAnalyst && <AnalystCard analyst={ui!.analyst!} />}
+
+              {showSchedule && <ScheduleCard schedule={ui!.schedule!} />}
 
               {/* Gate cần user thao tác → hiện NGAY trong khung chat (mỗi gate tự
                   render null nếu chưa tới lượt). Flow view-only nằm ở sidebar phải. */}
