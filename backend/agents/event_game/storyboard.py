@@ -135,13 +135,15 @@ def _pick_template(raw, templates_allowed: list, default_template: str) -> str:
 # ─────────────────────────────────────────────────────────────────────────────
 def _build_storyboard_system(p: dict, n: int, templates_allowed: list, gen_images: bool) -> str:
     tpl_opts = " | ".join(templates_allowed)
+    _vo = ('"voiceover": "1-2 câu THUYẾT MINH nội dung CỦA CẢNH NÀY (đủ ý, đọc trôi chảy, ~4-6s) — '
+           'BẮT BUỘC có, KHÔNG bỏ trống, KHÔNG chung chung, KHÔNG đọc số thứ tự kiểu Điều 1/Thứ nhất '
+           '(số thứ tự CHỈ ở event_title để hiển thị, không đưa vào voiceover)"')
     if gen_images:
-        scene_extra = (',\n      "voiceover": "1-2 câu (~4-6s)",'
-                       '\n      "image_prompt": "prompt TIẾNG ANH tả ảnh nền"')
+        scene_extra = ',\n      ' + _vo + ',\n      "image_prompt": "prompt TIẾNG ANH tả ảnh nền"'
         image_rule = ("\n- ẢNH NỀN (image_prompt) TIẾNG ANH: " + p["image_style"].format(mood="theo theme") +
                       ". NO text/logo/watermark/UI. Chừa vùng tối 1/3 dưới cho chữ.")
     else:
-        scene_extra = ',\n      "voiceover": "1-2 câu (~4-6s)"'
+        scene_extra = ',\n      ' + _vo
         image_rule = "\n- KHÔNG ảnh nền (nền là màu brand đơn sắc) → KHÔNG xuất image_prompt."
     return (
         p["storyboard_persona"] + ". Từ thông tin, dựng STORYBOARD gồm ĐÚNG " + str(n) +
@@ -167,7 +169,11 @@ def _build_storyboard_system(p: dict, n: int, templates_allowed: list, gen_image
         "NGUYÊN TẮC:\n"
         "- ĐÚNG " + str(n) + " scene. " + p["structure_rule"] + "\n"
         "- event_title MỖI cảnh CỤ THỂ — KHÔNG dùng từ chung chung ('SỰ KIỆN','GAME','EVENT').\n"
+        "- TUYỆT ĐỐI KHÔNG đánh số thứ tự ('Điều 1', 'Thứ nhất', '1.', '#1') trong event_title LẪN "
+        "voiceover — đặt tên & diễn đạt bằng NỘI DUNG, không bằng số thứ tự.\n"
         "- Mỗi cảnh đủ nội dung (title + ít nhất subtitle HOẶC highlights HOẶC cta).\n"
+        "- KHÔNG LẶP giữa các cảnh: voiceover + nội dung MỖI cảnh DUY NHẤT. Cảnh CUỐI là CTA/lời chốt "
+        "RIÊNG (kêu gọi hành động), TUYỆT ĐỐI KHÔNG nhắc/recap lại câu hay số liệu đã nói ở cảnh trước.\n"
         "- highlights = 4-6 DỮ KIỆN CỤ THỂ rút từ thông tin (số/%, tên sản phẩm/tính năng, mốc thời gian, "
         "kết quả đo lường). Bọc cụm NỔI BẬT NHẤT mỗi điểm trong dấu *..* (vd 'Giảm *40%* chi phí', "
         "'Xử lý *video + văn bản tiếng Việt*'). TUYỆT ĐỐI KHÔNG bịa số — chỉ lấy dữ kiện CÓ trong văn bản; "
@@ -202,6 +208,27 @@ def _build_extract_system(p: dict, gen_images: bool) -> str:
 # ─────────────────────────────────────────────────────────────────────────────
 # Normalize
 # ─────────────────────────────────────────────────────────────────────────────
+def _strip_marker(s) -> str:
+    """Bỏ marker nhấn mạnh *..* (chỉ dùng cho hiển thị banner) khỏi text đọc/voiceover."""
+    return re.sub(r"\*([^*]+)\*", r"\1", str(s or "")).strip()
+
+
+def _scene_vo_from_content(scene: dict) -> str:
+    """Thoại DỰ PHÒNG cho 1 cảnh khi LLM không cấp voiceover: ghép nội dung HIỂN THỊ của CHÍNH
+    cảnh đó (title + subtitle + highlights + cta) → mỗi cảnh đọc đúng banner của nó, KHÁC NHAU
+    giữa các cảnh (không dùng filler chung 'Cùng theo dõi nhé!' gây đọc lặp). Cô đọng đúng info cảnh."""
+    bits = [_strip_marker(scene.get("event_title")), _strip_marker(scene.get("event_subtitle"))]
+    bits += [_strip_marker(h) for h in (scene.get("highlights") or [])]
+    bits.append(_strip_marker(scene.get("cta")))
+    seen, out = set(), []
+    for b in bits:
+        key = b.lower()
+        if b and key not in seen:
+            seen.add(key)
+            out.append(b if b[-1] in ".!?…" else b + ".")
+    return _cap(" ".join(out), CAPS["voiceover"]) or "Cùng theo dõi nhé!"
+
+
 def _normalize_scene(scene: dict, subject: str, theme: dict, tpl: str,
                      gen_images: bool, preset_key: str) -> dict:
     hls = scene.get("highlights") or []
@@ -215,8 +242,10 @@ def _normalize_scene(scene: dict, subject: str, theme: dict, tpl: str,
         "period": _cap(scene.get("period"), CAPS["period"]),
         "time_detail": _cap(scene.get("time_detail"), CAPS["time_detail"]),
         "highlights": hls, "cta": _cap(scene.get("cta"), CAPS["cta"]), "theme": theme,
-        "voiceover": _cap(scene.get("voiceover"), CAPS["voiceover"]) or "Cùng theo dõi nhé!",
     }
+    # Thoại: ưu tiên LLM; THIẾU → dựng từ NỘI DUNG cảnh (mỗi cảnh đọc banner riêng, khác nhau)
+    # thay cho filler chung → không bị lặp "Cùng theo dõi nhé!" + đọc đúng info từng cảnh.
+    out["voiceover"] = _cap(scene.get("voiceover"), CAPS["voiceover"]) or _scene_vo_from_content(out)
     if gen_images:
         out["image_prompt"] = _cap(scene.get("image_prompt"), CAPS["image_prompt"]) \
             or image_style_prompt(preset_key, subject, title, theme.get("mood", ""))
@@ -251,15 +280,20 @@ def _extract_base(raw_text: str, preset_key: str, gen_images: bool) -> dict:
 
 
 def _split_sentences(text: str, n: int) -> list:
+    """Chẻ 1 đoạn thoại thành n phần theo ranh giới câu (khớp n cảnh).
+
+    SỐ CÂU < n: TUYỆT ĐỐI KHÔNG lặp lại câu (vd câu cuối) để bù cho đủ n — gây 'đọc lặp'
+    khó chịu (cùng 1 câu đọc nhiều cảnh). Cảnh dư để RỖNG; caller (_apply_voiceover) sẽ
+    GIỮ voiceover riêng của cảnh đó (storyboard đã sinh khác nhau) thay vì ghi đè bằng câu lặp."""
     parts = [p.strip() for p in re.split(r"(?<=[.!?…])\s+", (text or "").strip()) if p.strip()]
     if not parts:
         return [""] * n
     out, per, i = [], max(1, round(len(parts) / n)), 0
     for s in range(n):
         chunk = parts[i:i + per] if s < n - 1 else parts[i:]
-        out.append(" ".join(chunk) if chunk else parts[-1])
+        out.append(" ".join(chunk))   # chunk rỗng → "" (KHÔNG lặp câu cuối)
         i += per
-    return out[:n] + [parts[-1]] * max(0, n - len(out))
+    return (out + [""] * n)[:n]        # đảm bảo đúng n phần, pad RỖNG (không lặp câu)
 
 
 def _fallback_storyboard(base: dict, n: int, tpl: str, gen_images: bool, preset_key: str) -> dict:
@@ -269,7 +303,7 @@ def _fallback_storyboard(base: dict, n: int, tpl: str, gen_images: bool, preset_
     for i in range(n):
         first, last = (i == 0), (i == n - 1)
         sc = {
-            "event_title": base["event_title"] if first else (base["cta"] if last else f"Điều {i}"),
+            "event_title": base["event_title"] if first else (base["cta"] if last else base["subject"]),
             "event_subtitle": base["event_subtitle"] if first else "",
             "period": base["period"] if last else "",
             "time_detail": base["time_detail"] if last else "",
@@ -293,38 +327,113 @@ def _vo_valid(s: str) -> bool:
     return len(s) >= 40 and bool(re.search(r"[.!?…]", s))
 
 
+def _count_sentences(s: str) -> int:
+    """Đếm câu theo CÙNG quy tắc _split_sentences → biết thoại đã đủ đoạn cho n cảnh chưa."""
+    return len([p for p in re.split(r"(?<=[.!?…])\s+", (s or "").strip()) if p.strip()])
+
+
 def generate_voiceover(event_text: str, n_scenes: int = 2, preset: str = "game_event") -> str:
-    """Sinh kịch bản thoại (emotion tags) theo preset — ĐỘ DÀI co theo số cảnh. Retry 1 lần."""
+    """Sinh kịch bản thoại (emotion tags) theo preset — ĐỦ SỐ ĐOẠN cho n cảnh (mỗi cảnh ~1 đoạn).
+
+    Retry tăng dần nếu thoại quá ÍT câu so với số cảnh (model hay tóm tắt cụt còn 2-3 câu → lúc
+    chẻ phải bỏ trống/độn). Giữ bản NHIỀU câu nhất qua các lần thử."""
     n = max(1, min(int(n_scenes), 8))
     p = get_preset(preset)
-    user = (f"# INPUT DATA\n{(event_text or '').strip()}\n\n"
-            f"# ĐỘ DÀI BẮT BUỘC (số cảnh = {n})\n{_len_guide(preset, n)}")
-    out = ""
-    for temp in (0.85, 0.6):
+    base_user = (f"# INPUT DATA\n{(event_text or '').strip()}\n\n"
+                 f"# ĐỘ DÀI BẮT BUỘC (số cảnh = {n})\n{_len_guide(preset, n)}")
+    best, last = "", ""
+    for k, temp in enumerate((0.85, 0.6, 0.5)):
+        user = base_user
+        if k and _count_sentences(best) < n:   # lần 2+ thiếu đoạn → nhắc thẳng
+            user += (f"\n\n# LƯU Ý (bản trước THIẾU đoạn)\nBản trước chỉ {_count_sentences(best)} câu — "
+                     f"CHƯA đủ {n} cảnh. Viết LẠI cho ĐỦ ÍT NHẤT {n} đoạn (mỗi cảnh 1 đoạn), "
+                     f"mỗi đoạn một ý/dữ kiện KHÁC NHAU từ INPUT, KHÔNG lặp ý, KHÔNG độn câu rỗng.")
         raw = _chat(p["voiceover_system"], user, model=AI_PLATFORM_MODEL,
-                    temperature=temp, max_tokens=1500).strip()
+                    temperature=temp, max_tokens=2000).strip()
         fence = re.search(r"```(?:\w+)?\s*(.*?)```", raw, re.DOTALL)
         if fence:
             raw = fence.group(1).strip()
-        out = " ".join(raw.split())
-        if _vo_valid(out):
-            return out
-        log.warning("voiceover cụt/ngắn (%dc) → thử lại", len(out))
-    return out
+        last = " ".join(raw.split())
+        if _vo_valid(last) and _count_sentences(last) > _count_sentences(best):
+            best = last
+        if _vo_valid(best) and _count_sentences(best) >= n:   # đủ đoạn → dừng sớm
+            return best
+        log.warning("voiceover %d câu (cần ≥%d cho %d cảnh) → thử lại",
+                    _count_sentences(last), n, n)
+    return best or last
+
+
+def _vo_key(s: str) -> str:
+    """Chuẩn hoá 1 câu để so khớp TRÙNG: bỏ tag [cảm xúc] + marker *..* + dấu, hạ thường, chỉ giữ chữ-số."""
+    s = re.sub(r"\[[^\]]+\]", "", s or "")          # bỏ [emotion]
+    s = re.sub(r"\*([^*]+)\*", r"\1", s)            # bỏ marker *..*
+    return re.sub(r"[^0-9a-zà-ỹ]+", "", s.lower())
+
+
+# Nhãn ĐÁNH SỐ đầu câu — chỉ để HIỂN THỊ trên banner, KHÔNG đọc trong lời thoại (mọi template).
+# Chỉ nhận "Điều/Mục/Phần + SỐ" và "#N": luôn theo sau bởi CHỮ SỐ → an toàn (không đụng "Điều khoản",
+# "Mục tiêu", "Phần lớn"). CỐ Ý bỏ "Thứ N" vì trùng tên THỨ trong tuần (Thứ Hai…Thứ Bảy) — prompt đã
+# cấm sinh "Thứ nhất/hai…" trong thoại nên không cần strip, tránh xoá nhầm ngày trong tuần.
+_ORD_WORD_RE = re.compile(r"^\s*(?:(?:điều|mục|phần)\s+\d{1,2}|#\s*\d{1,2})\s*[:.)\-–]*\s*", re.IGNORECASE)
+# Số trần đầu câu ("3.", "12)") — BẮT BUỘC có SPACE sau dấu để KHÔNG nuốt số thập phân ("3.500").
+_ORD_NUM_RE = re.compile(r"^\s*\d{1,2}\s*[.)]\s+")
+
+
+def _strip_ordinal(s: str) -> str:
+    """Bỏ nhãn đánh số ở ĐẦU câu thoại ('Điều 3.', 'Thứ ba:', '#3', '3.') — số thứ tự là nhãn hiển
+    thị trên banner, KHÔNG đọc. Áp cho MỌI template. Lặp phòng nhãn nhiều lớp ('Điều 3. 1) …')."""
+    s, prev = (s or "").strip(), None
+    while s != prev:
+        prev = s
+        s = _ORD_NUM_RE.sub("", _ORD_WORD_RE.sub("", s)).strip()
+    return s
+
+
+def _dedupe_scene_vo(scenes: list, closing_fallback: str = "") -> None:
+    """Bỏ câu thoại TRÙNG giữa các cảnh — mỗi câu chỉ đọc 1 LẦN trong cả video (LLM hay recap số
+    liệu/câu mở đầu ở cảnh chốt → nghe lặp ở cuối). Cảnh bị bỏ HẾT câu (trùng toàn bộ) → cứu bằng
+    cta của cảnh / caption (nếu chưa nói); không cứu được thì để rỗng (cảnh câm — tts dựng audio im
+    lặng ngắn, KHÔNG nhồi filler/lặp)."""
+    seen: set = set()
+    for sc in scenes:
+        parts = [p.strip() for p in re.split(r"(?<=[.!?…])\s+", (sc.get("voiceover") or "").strip()) if p.strip()]
+        kept = []
+        for p in parts:
+            p = _strip_ordinal(p)        # bỏ "Điều 3.", "Thứ ba:"… khỏi lời ĐỌC (mọi template)
+            if not p:
+                continue
+            k = _vo_key(p)
+            if k and k not in seen:
+                seen.add(k)
+                kept.append(p)
+        vo = " ".join(kept).strip()
+        if not vo:  # cả cảnh trùng/chỉ có nhãn số → thử cta cảnh / caption (chưa nói) để cảnh không câm
+            for alt in (sc.get("cta"), closing_fallback):
+                alt = _strip_ordinal((alt or "").strip())
+                if alt and _vo_key(alt) and _vo_key(alt) not in seen:
+                    vo = alt
+                    seen.add(_vo_key(alt))
+                    break
+        sc["voiceover"] = vo
 
 
 def _apply_voiceover(scenes: list, raw_text: str, preset: str) -> None:
-    """Sinh voiceover chuyên dụng (dài theo số cảnh) rồi chẻ cho từng cảnh.
-    Nếu gen lỗi/cụt → GIỮ voiceover storyboard (không ghi đè bằng đoạn hỏng)."""
+    """Sinh voiceover chuyên dụng (đủ đoạn theo số cảnh) rồi chẻ cho từng cảnh.
+
+    CHỈ thay khi thoại chuyên dụng ĐỦ ĐOẠN cho MỌI cảnh (>= số cảnh). Ngắn hơn / lỗi / cụt →
+    GIỮ NGUYÊN thoại từng cảnh của storyboard (đã cô đọng đúng nội dung cảnh, khác nhau) —
+    tránh ghi đè bằng bản tóm tắt ngắn rồi phải bỏ trống/lặp cảnh sau."""
+    n = len(scenes)
     try:
-        vo = generate_voiceover(raw_text, len(scenes), preset)
+        vo = generate_voiceover(raw_text, n, preset)
     except Exception as e:  # noqa: BLE001
         log.warning("generate_voiceover lỗi (%s) → giữ voiceover storyboard", e)
         return
-    if not _vo_valid(vo):
-        log.warning("voiceover không hợp lệ → giữ voiceover storyboard")
+    if not _vo_valid(vo) or _count_sentences(vo) < n:
+        log.warning("voiceover chuyên dụng %d câu < %d cảnh → giữ thoại storyboard từng cảnh",
+                    _count_sentences(vo), n)
         return
-    chunks = _split_sentences(vo, len(scenes))
+    chunks = _split_sentences(vo, n)
     for i, sc in enumerate(scenes):
         if i < len(chunks) and chunks[i].strip():
             sc["voiceover"] = _cap(chunks[i], CAPS["voiceover"])
@@ -374,4 +483,6 @@ def build_storyboard(raw_text: str, n_scenes: int, angle: str = None,
 
     # Thay lời thoại bằng kịch bản chuyên dụng (chẻ cho từng cảnh) theo preset
     _apply_voiceover(result["scenes"], raw_text, preset)
+    # Lưới an toàn cuối: bỏ câu thoại TRÙNG giữa các cảnh (LLM hay recap số liệu mở đầu ở cảnh chốt).
+    _dedupe_scene_vo(result["scenes"], result.get("caption") or "")
     return result

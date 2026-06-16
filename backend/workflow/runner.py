@@ -484,8 +484,8 @@ def _gate_and_publish(run: dict, video_url: str | None, full_caption: str,
                       duration_sec: float | None) -> None:
     """Human gate + publish + metrics — chia sẻ giữa vlog và event_game.
 
-    Set step `human_approval` → awaiting → chờ gate → reject/schedule/now → publish → metrics.
-    Dùng id step `human_approval`/`publish_video`/`get_video_metrics` (có ở cả 2 step plan).
+    Set step `human_approval` → awaiting → chờ gate → reject/schedule/now → publish → Analyst.
+    Dùng id step `human_approval`/`publish_video`/`analyze_batch` (có ở cả 2 pipeline).
     """
     # ---- 5. [★] human gate — Human decide
     s = _start_step(run, "human_approval")

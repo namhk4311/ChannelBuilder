@@ -6,7 +6,7 @@
 - visual_style (file này) → nhóm template + CÓ gen ảnh hay không + dải số cảnh + phụ đề.
 
 `image`  = template ảnh AI cinematic (gen ảnh, 1–3 cảnh, không phụ đề) — như event_game cũ.
-`solid`  = template nền màu đơn sắc theo brand + pattern (KHÔNG gen ảnh, 5–8 cảnh, có phụ đề).
+`solid`  = template nền màu đơn sắc theo brand + pattern (KHÔNG gen ảnh, 3–5 cảnh, có phụ đề).
 Người dùng chọn visual_style bằng chip; brand chỉ hỏi khi `solid`.
 """
 from __future__ import annotations
@@ -25,13 +25,13 @@ VISUAL_STYLES = {
     },
     "solid": {
         "label": "🎨 Đơn sắc",
-        "hint": "nền màu brand, không gen ảnh (5–8 cảnh)",
+        "hint": "nền màu brand, không gen ảnh (3–5 cảnh)",
         "templates": ["listicle", "news", "corporate", "slide"],
         "default_template": "slide",
         "gen_images": False,
         "theme": "brand",          # màu lấy từ brand theme
-        "scenes": [5, 6, 7, 8],
-        "scene_default": 6,
+        "scenes": [3, 4, 5],
+        "scene_default": 4,
         "captions": True,
     },
 }
@@ -42,8 +42,9 @@ DEFAULT_VISUAL_STYLE = "image"
 BRAND_THEMES = {
     "vng": {
         "label": "VNG (cam/trắng)",
-        "bg": "#ffffff", "accent": "#ff6a00", "text": "#15120d", "muted": "#7b7b7b",
-        "pattern": "rgba(255,106,0,0.07)",
+        # Nền CAM, chữ TRẮNG (accent trắng → highlight bật bằng đậm; muted = trắng ngả nhẹ).
+        "bg": "#ff6a00", "accent": "#ffffff", "text": "#ffffff", "muted": "#ffe0cc",
+        "pattern": "rgba(255,255,255,0.10)",
     },
     "anthropic": {
         "label": "Anthropic (đen/đỏ coral)",

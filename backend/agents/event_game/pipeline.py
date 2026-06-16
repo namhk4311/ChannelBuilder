@@ -26,6 +26,8 @@ FPS = 24
 VOICE_SPEED = 1.3          # fallback nếu preset thiếu speed
 SCENE_GAP = 0.8            # cảnh dài hơn voice ~0.8s → giọng gần như liền mạch (chỉ ~0.2s "lấy hơi"
                            # giữa cảnh, vì TD=0.6s đã trùng phần đuôi). Đặt 0.6 = liền mạch hẳn; tăng = nghỉ lâu hơn.
+END_TAIL = 0.35            # cảnh CUỐI không có transition phía sau → đuôi câm = trọn SCENE_GAP (0.8s)
+                           # gây "voice hết mà video còn chạy". Cảnh cuối chỉ cần đuôi ngắn để khỏi cụt giọng.
 MUSIC_VOLUME = 0.45        # fallback nếu preset/run thiếu
 TTS_CONCURRENCY = 2        # ElevenLabs cap 2 đồng thời
 MAX_PARALLEL_SCENES = 3    # render chromium đồng thời
@@ -95,7 +97,9 @@ def produce(run: dict, storyboard: dict, progress_cb: Optional[Callable] = None)
 
         def render_one(i):
             scene = scenes[i]
-            vlen = vdata[i]["voice_sec"] + SCENE_GAP
+            # Cảnh cuối: đuôi ngắn (END_TAIL) vì không có transition hút phần dư → video kết
+            # thúc gần ngay sau voice. Cảnh khác: SCENE_GAP (phần dư trùng transition kế tiếp).
+            vlen = vdata[i]["voice_sec"] + (SCENE_GAP if i < n - 1 else END_TAIL)
             tpl = TEMPLATE_MAP.get(scene["template"], default_tpl)
             img = None
             if gen_images:

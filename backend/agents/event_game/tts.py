@@ -31,6 +31,10 @@ def synthesize(text: str, out_path: Path, speed: float = 1.0,
     stability/style/similarity: voice_settings theo preset (None → giá trị mặc định "hùng hổ"
     của game_event). stability THẤP = cảm xúc mạnh; style CAO = phóng đại ngữ điệu.
     """
+    if not (text or "").strip():
+        # Thoại rỗng (vd cảnh bị bỏ vì trùng câu) → dựng audio IM LẶNG ngắn, KHÔNG gọi ElevenLabs.
+        return _silent_mp3(out_path, 1.4)
+
     if not ELEVENLABS_API_KEY:
         raise RuntimeError("Thiếu ELEVENLABS_API_KEY trong .env")
 
@@ -74,6 +78,17 @@ def synthesize(text: str, out_path: Path, speed: float = 1.0,
         out_path.write_bytes(audio_bytes)
     else:
         log.info("tts · wrote %s (speed=%.2f)", out_path.name, speed)
+    return out_path
+
+
+def _silent_mp3(out_path: Path, seconds: float = 1.4) -> Path:
+    """Dựng file mp3 IM LẶNG dài `seconds` (cho cảnh không có thoại — vd bị bỏ vì trùng câu)."""
+    cmd = ["ffmpeg", "-y", "-f", "lavfi", "-i", "anullsrc=r=44100:cl=mono",
+           "-t", f"{max(0.4, float(seconds)):.2f}", "-c:a", "libmp3lame", "-b:a", "128k", str(out_path)]
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    if result.returncode != 0:
+        raise RuntimeError(f"silent mp3 failed: {result.stderr[-200:]}")
+    log.info("tts · silent %s (%.1fs)", out_path.name, seconds)
     return out_path
 
 

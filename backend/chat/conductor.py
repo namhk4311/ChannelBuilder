@@ -60,7 +60,7 @@ def _new_spec() -> dict:
         "publish_mode": "review_publish", "scheduled_for": None,
         # mode: 'vlog' (clip có sẵn) | 'info' (video thông tin).
         # event_text = đoạn mô tả nội dung; visual_style = 'image'|'solid' (chip);
-        # brand = theme nền cho solid (chip); n_scenes co theo visual_style (image 1-3 / solid 5-8).
+        # brand = theme nền cho solid (chip); n_scenes co theo visual_style (image 1-3 / solid 3-5).
         "mode": None, "event_text": None, "n_scenes": None,
         "visual_style": None, "brand": None,
         # music_track_id=None mơ hồ (chưa hỏi vs chọn 'không nhạc') → cờ riêng để biết đã chọn.
@@ -164,7 +164,10 @@ def _awaited_field(spec: dict) -> Optional[str]:
         if not spec.get("music_decided"):
             return "music_track_id"
         return None
-    # vlog: library (bắt buộc) → nhạc. topic là text tự do → để LLM dẫn.
+    # vlog: topic (text, HỎI ĐẦU TIÊN) → library (chip bắt buộc) → nhạc → xác nhận.
+    # topic phải gom TRƯỚC: scout/generate_ideas bám topic → ý tưởng đúng chủ đề.
+    if len((spec.get("topic") or "").strip()) < 2:
+        return "topic"   # TEXT tự do — không phải chip (LLM dẫn prose)
     if not spec.get("library"):
         return "library"
     if not spec.get("music_decided"):
@@ -242,6 +245,11 @@ def _apply_chip_answer(conv: dict, text: str, libs: list[dict], music: list[dict
             if f == "music_track_id":
                 spec["music_decided"] = True   # gồm cả 'Không nhạc' (val=None)
             log.info("conductor · chip → spec[%s]=%r", f, val)
+    elif f == "topic" and len((text or "").strip()) >= 2:
+        # Đang chờ chủ đề (vlog) → câu user CHÍNH LÀ topic (LLM hay quên ghi spec_patch.topic
+        # → topic kẹt null, đẩy thẳng tới chip xác nhận mà chưa hỏi chủ đề bao giờ).
+        spec["topic"] = text.strip()
+        log.info("conductor · text → spec[topic] (%dc)", len(text.strip()))
     elif f == "event_text" and len((text or "").strip()) >= 20:
         # Đang chờ nội dung → đoạn text dài user gửi CHÍNH LÀ event_text (LLM hay quên ghi).
         spec["event_text"] = text.strip()
@@ -727,6 +735,12 @@ def send_message(conv_id: str, text: str) -> Optional[dict]:
                     if not reply:
                         rng = scene_options(vstyle)
                         reply = f"Bạn muốn mấy cảnh? ({rng[0]}–{rng[-1]})"
+                elif not spec.get("music_decided"):
+                    # Khớp _awaited_field — đảm bảo hỏi nhạc trước khi chạy (kể cả LLM rogue-start sớm).
+                    action, ui_kind, field = "present_choices", "choices", "music_track_id"
+                    ui_options = _options_for_field("music_track_id", libs, music, spec)
+                    if not reply:
+                        reply = "Chọn nhạc nền nhé (hoặc không nhạc cũng được)."
                 else:
                     lib = spec.get("library") or (usable[0]["value"] if usable else "vng_insider")
                     run = start_run(
@@ -742,11 +756,22 @@ def send_message(conv_id: str, text: str) -> Optional[dict]:
                                   "storyboard → render → ghép + lồng nhạc. Khoảng 1-2 phút nhé.")
             else:
                 lib = spec.get("library")
-                if not lib or lib not in {o["value"] for o in usable}:
+                if len((spec.get("topic") or "").strip()) < 2:
+                    # Chưa có chủ đề → hỏi topic trước (kể cả khi LLM rogue-start sớm).
+                    action, ui_kind, field = "ask", "ask", "topic"
+                    if not reply:
+                        reply = "Bạn muốn làm video về chủ đề gì? (vd: một ngày ở canteen VNG, tour văn phòng…)"
+                elif not lib or lib not in {o["value"] for o in usable}:
                     action, ui_kind, field = "present_choices", "choices", "library"
                     ui_options = usable
                     if not reply:
                         reply = "Cho mình biết dựng video trong thư viện clip nào nhé."
+                elif not spec.get("music_decided"):
+                    # Khớp _awaited_field — hỏi nhạc trước khi chạy (kể cả LLM rogue-start sớm).
+                    action, ui_kind, field = "present_choices", "choices", "music_track_id"
+                    ui_options = _options_for_field("music_track_id", libs, music, spec)
+                    if not reply:
+                        reply = "Thêm nhạc nền cho video không? (hoặc chọn không nhạc)"
                 else:
                     run = start_run(
                         topic=spec.get("topic"), library=lib,

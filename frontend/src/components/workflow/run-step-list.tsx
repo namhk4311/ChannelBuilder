@@ -89,7 +89,7 @@ function StepTimer({ step }: { step: RunStep }) {
 // Thứ tự chuẩn của pipeline — sort phòng hờ data về không đúng thứ tự.
 const STEP_ORDER = [
   'scan_trends', 'generate_ideas', 'idea_approval', 'generate_script', 'qc_script', 'script_approval',
-  'produce_video', 'human_approval', 'publish_video', 'get_video_metrics', 'analyze_batch',
+  'produce_video', 'human_approval', 'publish_video', 'analyze_batch',
 ]
 const HIDDEN_STEPS = new Set(['idea_approval', 'human_approval', 'script_approval'])
 const stepRank = (id: string) => {
