@@ -41,13 +41,15 @@ export function useCreateSession() {
 }
 
 /** Gửi 1 message → conductor trả state mới (reply LLM + ui + run_id).
+ *  Id truyền theo từng lượt (không bind lúc tạo hook) → gửi được vào cuộc vừa
+ *  tạo lười từ landing (sessionId trên URL chưa kịp cập nhật).
  *  Optimistic: append ngay tin nhắn user vào cache để nó hiện TRƯỚC khi loader
  *  agent xuất hiện; server trả về thì thay bằng state thật (user + reply). */
-export function useSendMessage(id: string | null) {
+export function useSendMessage() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (text: string) => sendChatMessage(id!, text),
-    onMutate: async (text: string) => {
+    mutationFn: ({ id, text }: { id: string; text: string }) => sendChatMessage(id, text),
+    onMutate: async ({ id, text }) => {
       await qc.cancelQueries({ queryKey: ['chat', id] })
       const prev = qc.getQueryData<ChatSession>(['chat', id])
       if (prev) {
@@ -58,10 +60,10 @@ export function useSendMessage(id: string | null) {
           ui: { ...prev.ui, kind: 'pending', options: [] },
         })
       }
-      return { prev }
+      return { prev, id }
     },
-    onError: (_e, _text, ctx) => {
-      if (ctx?.prev) qc.setQueryData(['chat', id], ctx.prev) // rollback
+    onError: (_e, _vars, ctx) => {
+      if (ctx?.prev) qc.setQueryData(['chat', ctx.id], ctx.prev) // rollback
     },
     onSuccess: (s) => {
       qc.setQueryData(['chat', s.id], s)

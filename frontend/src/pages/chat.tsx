@@ -19,7 +19,6 @@ import {
   useRecordRun,
   useSendMessage,
 } from '@/hooks/use-chat'
-import { useChatStore } from '@/stores/chat-store'
 import { DirectorAvatar, MessageBubble } from '@/components/chat/message-bubble'
 import { OptionChips } from '@/components/chat/option-chips'
 import { TrendCard } from '@/components/chat/trend-card'
@@ -38,20 +37,18 @@ import { ApprovalGate } from '@/components/workflow/approval-gate'
  * Lịch sử lưu DB; reload + restart không mất.
  */
 export default function ChatPage() {
-  // URL là nguồn sự thật cho cuộc đang mở: /chat_xxx. Store chỉ nhớ "cuộc mở
-  // gần nhất" để khi vào "/" trống thì khôi phục (reload / mở lại tab không mất).
+  // URL là nguồn sự thật cho cuộc đang mở: /chat_xxx. Bare "/" = chưa có cuộc →
+  // hiện landing; cuộc CHỈ được tạo (vào lịch sử) khi user gửi tin đầu tiên.
   const { chatId } = useParams<{ chatId: string }>()
   const navigate = useNavigate()
   const sessionId = chatId ?? null
-  const lastSessionId = useChatStore((s) => s.sessionId)
-  const setLastSessionId = useChatStore((s) => s.setSessionId)
   // Mở 1 cuộc = đổi URL → /chat_id (sidebar, mobile select, sau khi tạo).
   const openSession = (id: string) => navigate(`/${id}`)
   const create = useCreateSession()
   const del = useDeleteSession()
   const sessions = useChatSessions()
   const session = useChatSession(sessionId)
-  const send = useSendMessage(sessionId)
+  const send = useSendMessage()
   const record = useRecordRun(sessionId)
   const [draft, setDraft] = useState('')
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -84,35 +81,14 @@ export default function ChatPage() {
     }
   }
 
-  // Đồng bộ URL → store: nhớ cuộc đang mở để lần sau vào "/" trống khôi phục lại.
-  useEffect(() => {
-    if (sessionId) setLastSessionId(sessionId)
-  }, [sessionId, setLastSessionId])
+  // Bare "/" KHÔNG còn auto-tạo/khôi phục cuộc: chỉ hiện landing. Cuộc mới được
+  // tạo lười khi user gửi tin đầu tiên (xem onSend) → lịch sử không bị rác cuộc trống.
 
-  // Vào "/" trống (không có chatId): khôi phục cuộc gần nhất nếu có, ngược lại
-  // tạo cuộc mới — rồi điều hướng tới /chat_id (replace để không kẹt "/" trong back).
-  // Guard bằng state mutation (pending/error) thay vì ref: KHÔNG auto-retry khi
-  // create lỗi (vd backend down) → tránh bắn POST /chat/sessions liên tục.
-  // Lỗi rồi thì user bấm "Mới" để thử lại (handleNew reset state mutation).
-  const createPending = create.isPending
-  const createError = create.isError
-  const createMutate = create.mutate
-  useEffect(() => {
-    if (chatId) return
-    if (lastSessionId) {
-      navigate(`/${lastSessionId}`, { replace: true })
-      return
-    }
-    if (createPending || createError) return
-    createMutate(undefined, { onSuccess: (s) => navigate(`/${s.id}`, { replace: true }) })
-  }, [chatId, lastSessionId, createPending, createError, createMutate, navigate])
-
-  // Session 404 (id trong URL lạ / đã xoá) → quên cuộc gần nhất + về "/" (tự tạo mới).
+  // Session 404 (id trong URL lạ / đã xoá) → về "/" (landing).
   useEffect(() => {
     if (!session.isError) return
-    setLastSessionId(null)
     navigate('/', { replace: true })
-  }, [session.isError, setLastSessionId, navigate])
+  }, [session.isError, navigate])
 
   const data = session.data
   const run = useRun(data?.run_id ?? null)
@@ -128,8 +104,11 @@ export default function ChatPage() {
   const showTrend = ui?.kind === 'trend' && !!ui.trend && !send.isPending
   const showAnalyst = ui?.kind === 'analyst' && !!ui.analyst && !send.isPending
   const showSchedule = ui?.kind === 'schedule' && !!ui.schedule && !send.isPending
-  // Cuộc còn trống (chỉ có lời chào, chưa start pipeline) → hiện landing page.
-  const showLanding = messages.length <= 1 && !data?.run_id && !send.isPending
+  // Đang khởi tạo lười (tạo cuộc) hoặc đang gửi → ẩn landing, hiện loader.
+  const starting = create.isPending || send.isPending
+  // Hiện landing khi: chưa có cuộc nào (bare "/") hoặc cuộc chỉ có lời chào, chưa
+  // start pipeline — và không trong lúc khởi tạo/gửi.
+  const showLanding = !starting && (!sessionId || (messages.length <= 1 && !data?.run_id))
   const runData = data?.run_id ? run.data : undefined
   // Pipeline đang xử lý (chưa tới gate / chưa xong) → khoá composer + nút vuông đỏ.
   const processing = runData?.status === 'running'
@@ -157,23 +136,29 @@ export default function ChatPage() {
 
   const onSend = (text: string) => {
     const t = text.trim()
-    if (!t || send.isPending || !sessionId) return
+    if (!t || starting) return
     setDraft('')
-    send.mutate(t)
+    if (sessionId) {
+      send.mutate({ id: sessionId, text: t })
+      return
+    }
+    // Landing (chưa có cuộc): tạo cuộc lười rồi gửi tin đầu vào đó + điều hướng
+    // tới /chat_id. Cuộc CHỈ vào lịch sử ở đây — không tạo trước khi user nhắn.
+    create.mutate(undefined, {
+      onSuccess: (s) => {
+        navigate(`/${s.id}`)
+        send.mutate({ id: s.id, text: t })
+      },
+    })
   }
 
-  const handleNew = () => {
-    if (create.isPending) return
-    create.mutate(undefined, { onSuccess: (s) => openSession(s.id) })
-  }
+  // "Mới" = về landing (KHÔNG tạo cuộc) — cuộc mới chỉ sinh khi user gửi tin đầu.
+  const handleNew = () => navigate('/')
 
   const handleDelete = (id: string) => {
     del.mutate(id, {
       onSuccess: () => {
-        if (id === sessionId) {
-          setLastSessionId(null) // quên cuộc vừa xoá
-          navigate('/') // effect tự khôi phục cuộc khác / tạo mới
-        }
+        if (id === sessionId) navigate('/') // về landing
       },
     })
   }
@@ -217,14 +202,14 @@ export default function ChatPage() {
 
           <div ref={scrollRef} className="chat-scroll flex flex-1 flex-col overflow-y-auto">
             {showLanding ? (
-              <ChatLanding onPick={onSend} disabled={!sessionId || send.isPending} />
+              <ChatLanding onPick={onSend} disabled={starting} />
             ) : (
             <div className="mx-auto w-full max-w-4xl space-y-5 px-1 py-2">
               {displayMessages.map((m, i) => (
                 <MessageBubble key={i} message={m} />
               ))}
 
-              {send.isPending && (
+              {starting && (
                 <div className="flex items-center gap-3">
                   <DirectorAvatar />
                   <span className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -271,7 +256,7 @@ export default function ChatPage() {
                 }
                 rows={1}
                 className="max-h-40 min-h-9 flex-1 resize-none border-0 bg-transparent px-0 py-1.5 text-sm shadow-none focus-visible:border-0 focus-visible:ring-0"
-                disabled={!sessionId || session.isLoading || processing}
+                disabled={session.isLoading || processing}
               />
               {processing ? (
                 <Button
@@ -289,10 +274,10 @@ export default function ChatPage() {
                   size="icon"
                   className="size-9 shrink-0 rounded-full"
                   onClick={() => onSend(draft)}
-                  disabled={!draft.trim() || send.isPending}
+                  disabled={!draft.trim() || starting}
                   aria-label="Gửi"
                 >
-                  {send.isPending ? <Loader2 className="animate-spin" /> : <ArrowUp />}
+                  {starting ? <Loader2 className="animate-spin" /> : <ArrowUp />}
                 </Button>
               )}
             </div>
