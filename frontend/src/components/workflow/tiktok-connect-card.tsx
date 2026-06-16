@@ -54,19 +54,8 @@ export function TikTokConnectCard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- chỉ chạy khi có code trên URL
   }, [urlCode, connected])
 
-  if (!status.data) return null
-
-  if (status.data.connected) {
-    return (
-      <p className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-muted-foreground">
-        <CheckCircle2 className="size-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" />
-        TikTok đã kết nối · open_id{' '}
-        <code className="text-foreground break-all">{status.data.open_id}</code> · scope{' '}
-        <code className="text-foreground break-all">{status.data.scope}</code> — token tự refresh,
-        không cần OAuth lại.
-      </p>
-    )
-  }
+  // Đã kết nối → card setup ẩn hẳn; trạng thái hiển thị ở <TikTokConnectedLine /> cuối trang.
+  if (!status.data || status.data.connected) return null
 
   const openAuthorize = async () => {
     try {
@@ -127,5 +116,24 @@ export function TikTokConnectCard() {
         </div>
       </AlertDescription>
     </Alert>
+  )
+}
+
+/**
+ * Dòng trạng thái "TikTok đã kết nối" — tách riêng để đặt cuối trang (chỉ thông tin,
+ * không cần nổi bật như card OAuth). Trả null khi chưa kết nối.
+ */
+export function TikTokConnectedLine() {
+  const status = usePublisherStatus()
+  if (!status.data?.connected) return null
+
+  return (
+    <p className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-muted-foreground">
+      <CheckCircle2 className="size-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" />
+      TikTok đã kết nối · open_id{' '}
+      <code className="text-foreground break-all">{status.data.open_id}</code> · scope{' '}
+      <code className="text-foreground break-all">{status.data.scope}</code> — token tự refresh,
+      không cần OAuth lại.
+    </p>
   )
 }

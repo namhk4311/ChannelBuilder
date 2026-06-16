@@ -65,43 +65,48 @@ export function MusicPicker({ value, onChange, disabled, idPrefix = 'mp' }: Musi
         </Select>
       </div>
 
-      <div className="flex items-center gap-2 pt-2 md:pt-0 md:pb-2">
-        <Switch
-          id={`${idPrefix}-beat`}
-          checked={value.beat_sync}
-          onCheckedChange={(beat_sync) => onChange({ ...value, beat_sync })}
-          disabled={disabled || !hasTrack}
-        />
-        <Label htmlFor={`${idPrefix}-beat`} className="text-sm text-muted-foreground">
-          Cut theo beat
-        </Label>
-      </div>
+      {/* Config nhạc chỉ hiện khi đã chọn track — không nhạc thì ẩn hẳn cho gọn */}
+      {hasTrack && (
+        <>
+          <div className="flex items-center gap-2 pt-2 md:pt-0 md:pb-2">
+            <Switch
+              id={`${idPrefix}-beat`}
+              checked={value.beat_sync}
+              onCheckedChange={(beat_sync) => onChange({ ...value, beat_sync })}
+              disabled={disabled}
+            />
+            <Label htmlFor={`${idPrefix}-beat`} className="text-sm text-muted-foreground">
+              Cut theo beat
+            </Label>
+          </div>
 
-      <div className="flex flex-col gap-1.5 md:min-w-44">
-        <Label htmlFor={`${idPrefix}-vol`} className="text-xs uppercase tracking-wide text-muted-foreground">
-          Music volume
-        </Label>
-        <div className="flex items-center gap-2">
-          <input
-            id={`${idPrefix}-vol`}
-            type="range"
-            min={30}
-            max={50}
-            step={5}
-            value={volPct}
-            disabled={disabled || !hasTrack}
-            onChange={(e) =>
-              onChange({ ...value, music_volume: parseInt(e.target.value, 10) / 100 })
-            }
-            className="accent-primary w-32 disabled:opacity-40"
-            aria-label="Music volume"
-            title="Clamped 30-50% để voice luôn nghe rõ trên nhạc"
-          />
-          <span className="tabular-nums text-sm text-primary font-medium min-w-12">
-            {volPct}%
-          </span>
-        </div>
-      </div>
+          <div className="flex flex-col gap-1.5 md:min-w-44">
+            <Label htmlFor={`${idPrefix}-vol`} className="text-xs uppercase tracking-wide text-muted-foreground">
+              Music volume
+            </Label>
+            <div className="flex items-center gap-2">
+              <input
+                id={`${idPrefix}-vol`}
+                type="range"
+                min={30}
+                max={50}
+                step={5}
+                value={volPct}
+                disabled={disabled}
+                onChange={(e) =>
+                  onChange({ ...value, music_volume: parseInt(e.target.value, 10) / 100 })
+                }
+                className="accent-primary w-32 disabled:opacity-40"
+                aria-label="Music volume"
+                title="Clamped 30-50% để voice luôn nghe rõ trên nhạc"
+              />
+              <span className="tabular-nums text-sm text-primary font-medium min-w-12">
+                {volPct}%
+              </span>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   )
 }

@@ -24,7 +24,7 @@ import { PipelineFlow } from '@/components/workflow/pipeline-flow'
 import { RunControls } from '@/components/workflow/run-controls'
 import { RunStepList } from '@/components/workflow/run-step-list'
 import { StepStatusChip } from '@/components/workflow/step-status-chip'
-import { TikTokConnectCard } from '@/components/workflow/tiktok-connect-card'
+import { TikTokConnectCard, TikTokConnectedLine } from '@/components/workflow/tiktok-connect-card'
 import { MUSIC_PICKER_DEFAULT, type MusicPickerValue } from '@/components/music-picker'
 
 const RUN_STATUS_AS_STEP: Record<RunStatus, StepStatus> = {
@@ -183,6 +183,9 @@ export default function WorkflowPage() {
           <AgentCatalog agents={agents.data} />
         </section>
       )}
+
+      {/* Trạng thái kết nối TikTok — để cuối trang, chỉ thông tin */}
+      <TikTokConnectedLine />
     </div>
   )
 }

@@ -58,11 +58,6 @@ interface RunControlsProps {
   hasLibrary: boolean
 }
 
-const PUBLISH_MODE_HINT: Record<PublishMode, string> = {
-  review_publish: 'Bạn duyệt ở bước cuối → đăng ngay lên TikTok.',
-  schedule: 'Bạn duyệt + chọn giờ → bài vào “Lịch đăng”, tự đăng tới giờ.',
-}
-
 /** Khu cấu hình + CTA chạy pipeline, gom control theo từng agent cho dễ hiểu. */
 export function RunControls({
   topic,
@@ -152,7 +147,6 @@ export function RunControls({
                 <SelectItem value="schedule">Lên lịch đăng</SelectItem>
               </SelectContent>
             </Select>
-            <p className="text-xs text-muted-foreground">{PUBLISH_MODE_HINT[publishMode]}</p>
           </div>
         </AgentGroup>
 
