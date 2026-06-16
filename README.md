@@ -319,6 +319,7 @@ python trần: `python3 backend/tests/test_qc_script.py`).
 | POST | `/api/analyst/analyze` | Run analysis (passA/B gate) trên batch |
 | POST | `/api/analyst/confirm` | Affirm decision (SCALE/MONITOR/KILL) |
 | GET | `/api/analyst/insight` | Fetch last insight digest → [B] |
+| GET | `/api/workflow/info-options` | Option form "Video thông tin" (visual style / brand / dải số cảnh) |
 | POST | `/api/workflow/runs/{id}/approval` | Gate decision (`decision: 'now'|'schedule'|'reject'`) |
 
 ---

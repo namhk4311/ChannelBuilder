@@ -77,7 +77,7 @@ def get_brand_theme(brand: str | None) -> dict:
 
 
 def scene_options(visual_style: str | None) -> list:
-    """Dải số cảnh hợp lệ theo visual_style (image: [1,2,3] · solid: [5,6,7,8])."""
+    """Dải số cảnh hợp lệ theo visual_style (image: [1,2,3] · solid: [3,4,5])."""
     return list(get_visual_style(visual_style)["scenes"])
 
 

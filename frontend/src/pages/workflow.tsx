@@ -13,9 +13,10 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
-import type { PublishMode, RunStatus, StepStatus } from '@/api/workflow'
+import type { PublishMode, RunStatus, StartRunBody, StepStatus, VideoMode, VisualStyle } from '@/api/workflow'
 import { useLibraryStore } from '@/stores/library-store'
-import { useAgents, useRun, useRuns, useStartRun } from '@/hooks/use-workflow'
+import { useAgents, useInfoOptions, useRun, useRuns, useStartRun } from '@/hooks/use-workflow'
+import { EVENT_TEXT_MIN } from '@/components/workflow/run-controls-info-fields'
 import { ScriptGate } from '@/components/chat/script-gate'
 import { AgentCatalog } from '@/components/workflow/agent-catalog'
 import { ApprovalGate } from '@/components/workflow/approval-gate'
@@ -39,14 +40,21 @@ const RUN_STATUS_AS_STEP: Record<RunStatus, StepStatus> = {
 
 export default function WorkflowPage() {
   const library = useLibraryStore((s) => s.library)
+  const [mode, setMode] = useState<VideoMode>('vlog')
   const [topic, setTopic] = useState('')
   const [subtitles, setSubtitles] = useState(true)
   const [music, setMusic] = useState<MusicPickerValue>(MUSIC_PICKER_DEFAULT)
   const [publishMode, setPublishMode] = useState<PublishMode>('review_publish')
   const [qcConfirm, setQcConfirm] = useState(false)
+  // Video thông tin (mode='info') — mặc định khớp visual_styles.py (image / vng / 2 cảnh).
+  const [eventText, setEventText] = useState('')
+  const [visualStyle, setVisualStyle] = useState<VisualStyle>('image')
+  const [brand, setBrand] = useState('vng')
+  const [nScenes, setNScenes] = useState(2)
   const [runId, setRunId] = useState<string | null>(null)
 
   const agents = useAgents()
+  const infoOptions = useInfoOptions()
   const runs = useRuns()
   const run = useRun(runId)
   const start = useStartRun((r) => {
@@ -62,20 +70,41 @@ export default function WorkflowPage() {
 
   const runActive = run.data?.status === 'running' || run.data?.status === 'awaiting_approval'
 
-  const handleStart = () =>
-    start.mutate(
-      {
-        topic: topic.trim() || null,
-        library: library ?? 'vng_insider',
-        subtitles,
-        music_track_id: music.music_track_id,
-        beat_sync: music.beat_sync,
-        music_volume: music.music_volume,
-        publish_mode: publishMode,
-        qc_mode: qcConfirm ? 'confirm' : 'auto',
-      },
-      { onError: (e) => toast.error(`Không khởi động được run: ${e.message}`) },
-    )
+  // Đổi phong cách hình ảnh → clamp số cảnh về mặc định của style mới (image:2 · solid:4).
+  const handleVisualStyle = (v: VisualStyle, sceneDefault: number) => {
+    setVisualStyle(v)
+    setNScenes(sceneDefault)
+  }
+
+  // Đủ điều kiện chạy: vlog cần thư viện clip · info cần nội dung đủ dài.
+  const canStart =
+    mode === 'info' ? eventText.trim().length >= EVENT_TEXT_MIN : !!library
+
+  const handleStart = () => {
+    const common: StartRunBody = {
+      library: library ?? 'vng_insider',
+      subtitles,
+      music_track_id: music.music_track_id,
+      beat_sync: music.beat_sync,
+      music_volume: music.music_volume,
+      publish_mode: publishMode,
+      qc_mode: qcConfirm ? 'confirm' : 'auto',
+    }
+    const body: StartRunBody =
+      mode === 'info'
+        ? {
+            ...common,
+            mode: 'info',
+            event_text: eventText.trim(),
+            visual_style: visualStyle,
+            brand,
+            n_scenes: nScenes,
+          }
+        : { ...common, mode: 'vlog', topic: topic.trim() || null }
+    start.mutate(body, {
+      onError: (e) => toast.error(`Không khởi động được run: ${e.message}`),
+    })
+  }
 
   return (
     <div className="space-y-6 md:space-y-8">
@@ -87,20 +116,31 @@ export default function WorkflowPage() {
 
       {/* Run controls — gom theo agent (Creative / Producer / Publisher) */}
       <RunControls
+        mode={mode}
+        setMode={setMode}
         topic={topic}
         setTopic={setTopic}
+        qcConfirm={qcConfirm}
+        setQcConfirm={setQcConfirm}
+        infoOptions={infoOptions.data}
+        visualStyle={visualStyle}
+        setVisualStyle={handleVisualStyle}
+        brand={brand}
+        setBrand={setBrand}
+        eventText={eventText}
+        setEventText={setEventText}
+        nScenes={nScenes}
+        setNScenes={setNScenes}
         subtitles={subtitles}
         setSubtitles={setSubtitles}
         music={music}
         setMusic={setMusic}
         publishMode={publishMode}
         setPublishMode={setPublishMode}
-        qcConfirm={qcConfirm}
-        setQcConfirm={setQcConfirm}
         onStart={handleStart}
         isPending={start.isPending}
         runActive={runActive}
-        hasLibrary={!!library}
+        canStart={canStart}
       />
 
       {/* Đóng vòng học [E]→[B]: báo trước vòng tới Creative học từ batch nào (nếu đã confirm) */}
