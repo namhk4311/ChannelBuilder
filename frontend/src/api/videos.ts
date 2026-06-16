@@ -1,4 +1,4 @@
-import { del, get, patch, postForm } from '@/lib/api-client'
+import { del, get, patch, post, postForm } from '@/lib/api-client'
 import type { Clip } from '@/api/types'
 
 export const fetchVideos = (library: string, category?: string) =>
@@ -43,3 +43,15 @@ export const updateVideo = (
 ) => patch<{ ok: boolean }>(`/videos/${encodeURIComponent(id)}`, body)
 
 export const deleteVideo = (id: string) => del<{ ok: boolean }>(`/videos/${encodeURIComponent(id)}`)
+
+export interface BackfillResult {
+  checked: number
+  fixed: number
+  failed: string[]
+}
+
+/** Quét lại thời lượng cho clip đang hiển thị 0.0s (ffprobe lại từ MinIO). */
+export const backfillDurations = (library?: string) =>
+  post<BackfillResult>('/videos/backfill-durations', library ? { library } : {}, {
+    timeout: 0, // tải + ffprobe nhiều clip có thể lâu
+  })

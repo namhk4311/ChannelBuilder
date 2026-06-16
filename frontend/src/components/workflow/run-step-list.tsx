@@ -118,10 +118,19 @@ export function RunStepList({ steps, ordinal }: { steps: RunStep[]; ordinal?: bo
     if (analystDone) setOpen((prev) => (prev.includes('analyze_batch') ? prev : [...prev, 'analyze_batch']))
   }, [analystDone])
 
+  // Chỉ cho mở detail khi bước đã DỪNG (Xong / Lỗi…) — đang chạy thì khoá (output có
+  // thể là bản cũ của lần chạy trước trong vòng QC tự sửa). Lọc luôn `open` để bước
+  // chuyển về "Đang chạy" (vd generate_script viết lại) tự thu gọn.
+  const isExpandable = (step: RunStep) =>
+    step.status !== 'running' && step.status !== 'pending' &&
+    (step.output != null || step.error != null)
+  const expandableIds = new Set(visibleSteps.filter(isExpandable).map((s) => s.id))
+  const openValue = open.filter((id) => expandableIds.has(id))
+
   return (
-    <Accordion type="multiple" value={open} onValueChange={setOpen} className="w-full">
+    <Accordion type="multiple" value={openValue} onValueChange={setOpen} className="w-full">
       {visibleSteps.map((step, i) => {
-        const expandable = step.output != null || step.error != null
+        const expandable = isExpandable(step)
         const showProgress = step.status === 'running' && step.progress != null
         return (
           <AccordionItem key={step.id} value={step.id} disabled={!expandable}>

@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
+  backfillDurations,
   deleteVideo,
   fetchMoods,
   fetchVideos,
@@ -56,6 +57,14 @@ export function useDeleteVideo(library: string | null) {
   const invalidate = useInvalidateVideos(library)
   return useMutation({
     mutationFn: deleteVideo,
+    onSuccess: invalidate,
+  })
+}
+
+export function useBackfillDurations(library: string | null) {
+  const invalidate = useInvalidateVideos(library)
+  return useMutation({
+    mutationFn: () => backfillDurations(library ?? undefined),
     onSuccess: invalidate,
   })
 }

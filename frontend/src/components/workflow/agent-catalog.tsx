@@ -3,6 +3,9 @@ import { Card, CardContent } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
 import type { Agent } from '@/api/workflow'
 
+// Tool nội bộ (chỉ dùng cho fallback dataset seed của Scout) — ẩn khỏi catalog cho gọn.
+const HIDDEN_TOOLS = new Set(['fetch_from_samples'])
+
 /** Catalog 5 agent + tool definitions đọc live từ TOOL_DEFINITIONS của từng package. */
 export function AgentCatalog({ agents }: { agents: Agent[] }) {
   return (
@@ -39,7 +42,7 @@ export function AgentCatalog({ agents }: { agents: Agent[] }) {
             )}
 
             <ul className="space-y-1.5">
-              {agent.tools.map((tool) => (
+              {agent.tools.filter((tool) => !HIDDEN_TOOLS.has(tool.name)).map((tool) => (
                 <li key={tool.name} className="flex items-start gap-2 text-sm">
                   <Wrench className="size-3.5 text-muted-foreground shrink-0 mt-1" />
                   <div className="min-w-0">

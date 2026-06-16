@@ -416,17 +416,30 @@ def generate_script(idea, insight_digest=None, target_duration_sec=48, qc_feedba
 
 
 def _build_qc_feedback_block(qc_feedback) -> str:
-    """QC issues → chỉ dẫn sửa cho [B] (viết lại khắc phục). '' nếu rỗng."""
-    fb = []
-    for it in qc_feedback or []:
-        if not isinstance(it, dict):
-            continue
-        fb.append(f"- [{it.get('severity', 'warning')}] {it.get('where', '')}: "
-                  f"{it.get('detail', '')} → SỬA: {it.get('suggested_fix', '')}")
-    if not fb:
+    """QC issues → chỉ dẫn sửa cho [B] (viết lại khắc phục). '' nếu rỗng.
+
+    Ưu tiên xử lý LỖI NẶNG (severity=error) TRƯỚC, rồi mới tới cảnh báo — tách 2
+    nhóm rõ ràng để [B] khắc phục lỗi nặng trước khi đụng cảnh báo nhẹ.
+    """
+    items = [it for it in (qc_feedback or []) if isinstance(it, dict)]
+    errors = [it for it in items if str(it.get("severity", "")).lower() == "error"]
+    warns = [it for it in items if str(it.get("severity", "")).lower() != "error"]
+    if not errors and not warns:
         return ""
-    return ("Bản kịch bản TRƯỚC bị các lỗi QC sau. Viết LẠI để khắc phục HẾT các lỗi này, "
-            "giữ đúng tone + cấu trúc + ràng buộc thời lượng/số từ:\n" + "\n".join(fb))
+
+    def _fmt(it) -> str:
+        return (f"- {it.get('where', '')}: {it.get('detail', '')} "
+                f"→ SỬA: {it.get('suggested_fix', '')}")
+
+    parts = ["Bản kịch bản TRƯỚC bị các lỗi QC sau. Viết LẠI để khắc phục, "
+             "giữ đúng tone + cấu trúc + ràng buộc thời lượng/số từ."]
+    if errors:
+        parts.append("⚠ LỖI NẶNG (ưu tiên sửa TRƯỚC — bắt buộc khắc phục HẾT):\n"
+                     + "\n".join(_fmt(e) for e in errors))
+    if warns:
+        parts.append("Cảnh báo (xử lý sau khi đã sửa hết lỗi nặng):\n"
+                     + "\n".join(_fmt(w) for w in warns))
+    return "\n\n".join(parts)
 
 
 def _do_generate_script(idea, insight_digest=None, target_duration_sec=48, qc_feedback=None):

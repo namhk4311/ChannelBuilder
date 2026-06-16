@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { Clapperboard, Upload } from 'lucide-react'
+import { Clapperboard, Timer, Upload } from 'lucide-react'
+import { toast } from 'sonner'
 import { PageHeader } from '@/components/common/page-header'
 import { EmptyState } from '@/components/common/empty-state'
 import { LoadError } from '@/components/common/load-error'
@@ -15,7 +16,7 @@ import {
 } from '@/components/ui/select'
 import { useLibraryStore } from '@/stores/library-store'
 import { useCategories } from '@/hooks/use-categories'
-import { useVideos } from '@/hooks/use-videos'
+import { useBackfillDurations, useVideos } from '@/hooks/use-videos'
 import { CategoryManager } from '@/components/category-manager'
 import { ClipTable } from '@/components/clip-table'
 import { MusicLibrary } from '@/components/music-library'
@@ -30,6 +31,18 @@ export default function WarehousePage() {
 
   const categories = useCategories(library)
   const videos = useVideos(library, categoryFilter ?? undefined)
+  const backfill = useBackfillDurations(library)
+
+  const handleBackfill = () =>
+    backfill.mutate(undefined, {
+      onSuccess: (r) =>
+        r.fixed > 0
+          ? toast.success(`Đã cập nhật thời lượng cho ${r.fixed} clip`)
+          : toast.info(
+              r.checked === 0 ? 'Mọi clip đã có thời lượng' : 'Không quét được clip nào',
+            ),
+      onError: (e) => toast.error(`Quét thời lượng lỗi: ${(e as Error).message}`),
+    })
 
   const filtered = (videos.data ?? []).filter((v) => {
     const q = search.trim().toLowerCase()
@@ -44,9 +57,19 @@ export default function WarehousePage() {
         title="Kho clip"
         description="Nguồn footage cho Producer — LLM chỉ pick clip trong thư viện đang chọn."
         actions={
-          <Button onClick={() => setUploadOpen(true)} disabled={!library}>
-            <Upload /> Upload clip
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              onClick={handleBackfill}
+              disabled={!library || backfill.isPending}
+              title="Quét lại thời lượng các clip đang hiện 0.0s"
+            >
+              <Timer /> {backfill.isPending ? 'Đang quét…' : 'Quét lại thời lượng'}
+            </Button>
+            <Button onClick={() => setUploadOpen(true)} disabled={!library}>
+              <Upload /> Upload clip
+            </Button>
+          </div>
         }
       />
 

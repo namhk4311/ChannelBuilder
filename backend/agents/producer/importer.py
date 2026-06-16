@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import json
 import logging
+import os
+import tempfile
 from pathlib import Path
 from typing import Callable, Optional
 
@@ -13,6 +15,7 @@ from config import BUCKET_SOURCES, DATA_RAW_PATH
 
 from .categories import default_tag_from_category, default_tag_from_clip_id
 from .db import pg
+from .ffprobe import ffprobe_metadata
 from .storage import minio_client
 
 log = logging.getLogger(__name__)
@@ -102,6 +105,13 @@ def import_from_data_raw(
                 progress_cb(idx, total, clip_id, "dry-run")
             continue
 
+        # Duration: tin số trong index nếu có; rỗng/≤0 → ffprobe file thật (file đang
+        # nằm trên đĩa) để tránh hiện 0.0s như các clip xlsx bỏ trống cột thời lượng.
+        duration = clip.get("duration_sec")
+        if not duration or duration <= 0:
+            probed_dur, _ = ffprobe_metadata(str(src_file))
+            duration = probed_dur
+
         minio_client.fput_object(
             BUCKET_SOURCES, object_name, str(src_file),
             content_type="video/quicktime" if ext.lower() == ".mov" else "video/mp4",
@@ -121,7 +131,7 @@ def import_from_data_raw(
                 clip.get("clip_tag", ""),
                 clip.get("description") or "",
                 clip.get("mood") or "",
-                clip.get("duration_sec") or 0,
+                duration or 0,
                 bool(clip.get("has_people")),
                 clip.get("people_note_raw") or "",
                 clip.get("resolution"),
@@ -146,6 +156,61 @@ def import_from_data_raw(
     }
 
 
+def backfill_durations(library: Optional[str] = None) -> dict:
+    """Quét lại thời lượng cho clip có duration_sec NULL/≤0 (vd clip import từ xlsx
+    bỏ trống cột thời lượng → hiện 0.0s trên UI).
+
+    Tải object từ MinIO sources → ffprobe → UPDATE duration_sec (+ resolution nếu
+    rỗng). Đọc từ MinIO nên chạy được cả local lẫn deploy (không cần data_raw trên
+    đĩa). Idempotent: chạy lại không đổi gì khi mọi clip đã có thời lượng.
+    """
+    where = "WHERE (duration_sec IS NULL OR duration_sec <= 0) AND object_name IS NOT NULL"
+    params: list = []
+    if library:
+        where += " AND library = %s"
+        params.append(library)
+    with pg() as conn:
+        rows = conn.execute(
+            f"SELECT id, object_name, resolution FROM videos {where}", params
+        ).fetchall()
+
+    log.info("backfill_durations: %d clip cần quét (library=%s)", len(rows), library or "*")
+    fixed = 0
+    failed: list[str] = []
+    for row in rows:
+        vid, object_name, resolution = row["id"], row["object_name"], row["resolution"]
+        ext = Path(object_name).suffix or ".mp4"
+        fd, tmp_path = tempfile.mkstemp(suffix=ext, prefix="probe_")
+        os.close(fd)
+        try:
+            minio_client.fget_object(BUCKET_SOURCES, object_name, tmp_path)
+            dur, res = ffprobe_metadata(tmp_path)
+        except Exception as e:  # noqa: BLE001 — 1 clip lỗi không chặn cả batch
+            log.warning("backfill_durations: probe %s lỗi: %s", vid, e)
+            failed.append(vid)
+            continue
+        finally:
+            Path(tmp_path).unlink(missing_ok=True)
+
+        if not dur or dur <= 0:
+            failed.append(vid)
+            continue
+        with pg() as conn:
+            if resolution:
+                conn.execute("UPDATE videos SET duration_sec = %s WHERE id = %s", (dur, vid))
+            else:
+                conn.execute(
+                    "UPDATE videos SET duration_sec = %s, resolution = %s WHERE id = %s",
+                    (dur, res, vid),
+                )
+        fixed += 1
+        log.info("backfill_durations: %s → %.2fs", vid, dur)
+
+    log.info("backfill_durations done: checked=%d fixed=%d failed=%d",
+             len(rows), fixed, len(failed))
+    return {"checked": len(rows), "fixed": fixed, "failed": failed}
+
+
 class ImportRequest(BaseModel):
     library: str = Field("vng_insider", min_length=1, max_length=80,
                          description="Library đích — categories + videos nhập vào đây")
@@ -165,3 +230,15 @@ def import_data_raw_endpoint(body: ImportRequest = ImportRequest()):
         return import_from_data_raw(DATA_RAW_PATH, library=body.library)
     except FileNotFoundError as e:
         raise HTTPException(400, str(e))
+
+
+class BackfillRequest(BaseModel):
+    library: Optional[str] = Field(
+        None, max_length=80,
+        description="Giới hạn trong 1 library; bỏ trống = quét mọi library")
+
+
+@router.post("/api/videos/backfill-durations")
+def backfill_durations_endpoint(body: BackfillRequest = BackfillRequest()):
+    """Quét lại thời lượng cho clip đang hiển thị 0.0s (ffprobe lại từ MinIO)."""
+    return backfill_durations(library=body.library)
