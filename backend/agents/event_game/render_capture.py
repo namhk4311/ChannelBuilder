@@ -120,7 +120,13 @@ def _capture_frames(html_path: Path, frames_dir: Path, duration: float, fps: int
     frames_dir.mkdir(parents=True, exist_ok=True)
 
     with sync_playwright() as p:
-        browser = p.chromium.launch(args=["--force-color-profile=srgb", "--hide-scrollbars"])
+        browser = p.chromium.launch(args=[
+            "--force-color-profile=srgb", "--hide-scrollbars",
+            # Cần khi chạy trong container (AgentBase chạy root, /dev/shm nhỏ, không GPU):
+            # thiếu --no-sandbox → chromium crash ngay (TargetClosedError);
+            # --disable-dev-shm-usage tránh hết /dev/shm; --disable-gpu tránh GPU process crash.
+            "--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu",
+        ])
         page = browser.new_page(viewport={"width": W, "height": H}, device_scale_factor=1)
         page.goto(html_path.as_uri(), wait_until="networkidle")
         # Chờ font load xong → tránh frame đầu sai font (đúng dấu tiếng Việt)

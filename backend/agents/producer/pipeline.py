@@ -246,10 +246,19 @@ SUB_STROKE = 4         # viền đen quanh chữ
 SUB_MARGIN_BOTTOM = 340  # khoảng cách từ mép dưới khung 1920
 
 _FONT_CANDIDATES = [
-    "/System/Library/Fonts/Supplemental/Arial Bold.ttf",   # đậm, đủ dấu Việt
+    # macOS (local dev) — đậm, đủ dấu Việt
+    "/System/Library/Fonts/Supplemental/Arial Bold.ttf",
     "/Library/Fonts/Arial Unicode.ttf",
     "/System/Library/Fonts/Supplemental/Arial.ttf",
     "/System/Library/Fonts/Helvetica.ttc",
+    # Linux container (python:slim) — cài qua apt trong Dockerfile
+    # (fonts-liberation + fonts-dejavu-core). KHÔNG có font → PIL rớt về
+    # load_default() (bitmap ~10px, bỏ qua size) → phụ đề bị NHỎ XÍU trên deploy.
+    # Liberation Sans Bold = metric tương thích Arial → khớp look local nhất;
+    # DejaVu Sans Bold = fallback phủ đủ dấu tiếng Việt.
+    "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
+    "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+    "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
 ]
 
 
