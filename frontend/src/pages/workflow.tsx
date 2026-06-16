@@ -20,7 +20,6 @@ import { EVENT_TEXT_MIN } from '@/components/workflow/run-controls-info-fields'
 import { ScriptGate } from '@/components/chat/script-gate'
 import { AgentCatalog } from '@/components/workflow/agent-catalog'
 import { ApprovalGate } from '@/components/workflow/approval-gate'
-import { InsightActiveBanner } from '@/components/workflow/insight-active-banner'
 import { PipelineFlow } from '@/components/workflow/pipeline-flow'
 import { RunControls } from '@/components/workflow/run-controls'
 import { RunStepList } from '@/components/workflow/run-step-list'
@@ -142,9 +141,6 @@ export default function WorkflowPage() {
         runActive={runActive}
         canStart={canStart}
       />
-
-      {/* Đóng vòng học [E]→[B]: báo trước vòng tới Creative học từ batch nào (nếu đã confirm) */}
-      <InsightActiveBanner />
 
       {/* Kết nối TikTok cho Publisher [D] — OAuth 1 lần từ UI */}
       <TikTokConnectCard />

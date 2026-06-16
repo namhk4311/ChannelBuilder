@@ -67,7 +67,7 @@ STEP_PLAN: list[dict[str, str]] = [
     {"id": "publish_video", "agent": "publisher", "code": "D", "tool": "publish_video",
      "title": "Đăng TikTok"},
     {"id": "analyze_batch", "agent": "analyst", "code": "E", "tool": "analyze_batch",
-     "title": "Phân tích batch + insight (Analyst)"},
+     "title": "Phân tích video đã đăng"},
 ]
 
 # Event game dùng CHUNG STEP_PLAN với vlog (đi qua đúng workflow chuẩn) — chỉ khác
