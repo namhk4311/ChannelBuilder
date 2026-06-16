@@ -204,7 +204,19 @@ def _hint_mentions_people(scene_hint: Optional[str]) -> bool:
 # Fill-plan tuning (mỗi câu lấp bằng NHIỀU clip phân biệt thay vì loop 1 clip):
 _FILL_EPS = 0.05             # bỏ qua phần dư < 50ms
 _MIN_SUB_SEGMENT_SEC = 1.5  # mỗi clip hiện ≥1.5s (đủ xem, tránh cắt lia lịa)
-_MAX_CLIPS_PER_SENTENCE = 4  # trần clip/câu (tránh machine-gun cut với câu rất dài)
+_MAX_CLIPS_PER_SENTENCE = 6  # trần clip/câu (6×1.5s≈9s window vẫn không machine-gun-cut)
+
+# clip_tag → pillar (brand 3 pillar). Khi bucket của 1 tag cạn distinct clip mà câu còn
+# dài, mượn thêm clip PHÂN BIỆT từ tag KHÁC CÙNG PILLAR (thay vì loop 1 clip). `buzones`
+# (logo/Zalo/VNGGames) = pillar `bu` → cô lập; còn lại đều campus B-roll, kênh tour campus
+# nên mượn chéo trong campus là brand-safe. Tag lạ → coi như campus (pool lớn nhất, an toàn).
+_TAG_PILLAR = {
+    "campusngoaicanh": "campus", "khonggianmo": "campus", "gym": "campus",
+    "canteencafe": "campus", "goclamviec": "campus", "cayxanhthugian": "campus",
+    "hopteam": "campus", "sukienclb": "campus",
+    "buzones": "bu",
+}
+_DEFAULT_PILLAR = "campus"
 
 
 def _bucket_for_line(line: dict, clips_catalog: list[dict]) -> list[dict]:
@@ -215,6 +227,32 @@ def _bucket_for_line(line: dict, clips_catalog: list[dict]) -> list[dict]:
         alt = line.get("alt_tag")
         bucket = [c for c in clips_catalog if c.get("clip_tag") == alt] if alt else []
     return bucket
+
+
+def _pillar_of(tag: Optional[str]) -> str:
+    return _TAG_PILLAR.get(tag or "", _DEFAULT_PILLAR)
+
+
+def _pillar_pool(primary: list[dict], clips_catalog: list[dict], exclude_ids: set) -> list[dict]:
+    """Clip CÙNG PILLAR với footage primary đang chiếu — để mượn chéo khi bucket cạn.
+
+    Pillar suy từ `clip_tag` THỰC của `primary[0]` (= tag mà `_bucket_for_line` đã match, đã
+    xử fallback clip_tag→alt_tag). KHÔNG dùng `line.clip_tag` thô: nếu clip_tag là tag
+    rỗng-bucket và bucket thực rơi xuống alt_tag KHÁC pillar, pillar suy theo line.clip_tag sẽ
+    lệch với footage thật → pool rỗng → loop thay vì mượn (bug M1). Bỏ `exclude_ids` (primary) +
+    clip thiếu id. `buzones` cô lập (pillar bu); còn lại pool chung campus.
+    """
+    if not primary:
+        return []
+    pillar = _pillar_of(primary[0].get("clip_tag"))
+    pool = []
+    for c in clips_catalog:
+        cid = c.get("id")
+        if cid is None or cid in exclude_ids:
+            continue
+        if _pillar_of(c.get("clip_tag")) == pillar:
+            pool.append(c)
+    return pool
 
 
 def _rank_bucket(line: dict, bucket: list[dict], used: dict[str, int]) -> list[dict]:
@@ -272,17 +310,23 @@ def build_fill_plan(
             # compute_sentence_cuts đã đảm bảo segment ≥ _MIN_SEGMENT_SEC; guard này
             # chỉ phòng caller truyền cuts thủ công không hợp lệ → fallback an toàn.
             return None
-        bucket = _bucket_for_line(line, clips_catalog)
-        if not bucket:
+        primary = _bucket_for_line(line, clips_catalog)
+        if not primary:
             log.warning("fill-plan: câu %d tag=%r alt=%r không có clip → fallback legacy",
                         i, line.get("clip_tag"), line.get("alt_tag"))
             return None
-        ranked = _rank_bucket(line, bucket, used)
+        # Ứng viên = clip đúng tag (rank scene_hint) TRƯỚC, rồi clip cùng pillar (mượn chéo)
+        # khi window dài hơn footage phân biệt của tag. Primary luôn đứng đầu → chỉ mượn khi
+        # primary đã cạn (greedy break theo window). Loop 1-clip chỉ còn là last resort.
+        primary_ids = {c.get("id") for c in primary}
+        ranked_primary = _rank_bucket(line, primary, used)
+        ranked_pillar = _rank_bucket(line, _pillar_pool(primary, clips_catalog, primary_ids), used)
+        candidates = ranked_primary + ranked_pillar
 
         # Greedy lấp window bằng clip phân biệt (theo thứ tự rank).
         segs: list[tuple[dict, float]] = []  # (clip, length sec)
         consumed = 0.0
-        for clip in ranked:
+        for clip in candidates:
             if consumed >= window - _FILL_EPS or len(segs) >= _MAX_CLIPS_PER_SENTENCE:
                 break
             if clip.get("id") is None:
@@ -314,9 +358,11 @@ def build_fill_plan(
             used[clip["id"]] = used.get(clip["id"], 0) + 1
             ecuts.append(acc)
         n_distinct = len({c["id"] for c, _ in segs})
-        log.info("fill-plan: câu %d window=%.2fs scene_hint=%r → %d clip (%d phân biệt)%s",
-                 i, window, line.get("scene_hint"), len(segs), n_distinct,
-                 " [tail loop]" if consumed < window - _FILL_EPS else "")
+        n_borrowed = sum(1 for c, _ in segs if c.get("id") not in primary_ids)
+        log.info("fill-plan: câu %d window=%.2fs tag=%r scene_hint=%r → %d clip (%d phân biệt, "
+                 "%d mượn chéo cùng pillar)%s",
+                 i, window, line.get("clip_tag"), line.get("scene_hint"), len(segs), n_distinct,
+                 n_borrowed, " [tail loop — pillar cạn]" if consumed < window - _FILL_EPS else "")
 
     ecuts = _sanitize_cuts(ecuts, float(cuts[-1]))
     if len(ecuts) != len(ids) + 1:

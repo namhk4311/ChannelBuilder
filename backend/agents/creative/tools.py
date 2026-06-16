@@ -312,10 +312,12 @@ def _validate_script(pkg: dict) -> list:
             warnings.append(f"line {n}: alt_tag '{alt}' không hợp lệ")
         if dur > CLIP_TAGS[tag]["budget_sec"] and not alt:
             warnings.append(
-                f"line {n}: {dur}s > ngân sách {CLIP_TAGS[tag]['budget_sec']}s của tag '{tag}' mà không có alt_tag"
+                f"line {n}: {dur}s > ngân sách {CLIP_TAGS[tag]['budget_sec']}s của tag '{tag}' mà không có alt_tag "
+                f"→ Producer sẽ phải lặp lại scene; thêm alt_tag cùng pillar hoặc tách câu"
             )
         if tag in SINGLE_CLIP_TAGS and dur > CLIP_TAGS[tag]["budget_sec"]:
-            warnings.append(f"line {n}: tag '{tag}' chỉ có 1 clip ({CLIP_TAGS[tag]['budget_sec']}s) — câu phải ngắn hơn hoặc có alt_tag")
+            warnings.append(f"line {n}: tag '{tag}' chỉ có 1 clip ({CLIP_TAGS[tag]['budget_sec']}s) — câu dài sẽ "
+                            f"LẶP LẠI scene đó; câu phải ngắn hơn, tách câu, hoặc bắt buộc gán alt_tag cùng pillar")
 
     # 2. Tổng thời lượng 40-55s + số từ 110-140
     total = sum(l.get("duration_sec", 0) for l in pkg.get("script", []))
