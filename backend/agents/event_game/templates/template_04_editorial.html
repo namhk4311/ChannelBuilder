@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Be+Vietnam+Pro:wght@500;700;800&display=swap" rel="stylesheet" />
+<style>
+  :root { --primary: @@PRIMARY@@; --secondary: @@SECONDARY@@; --accent: @@ACCENT@@;
+    --tt-fill:#ffffff; --tt-stroke: rgba(0,0,0,0.85); --tt-stroke-w: 2.5px; }
+  @@TREATMENTS_CSS@@
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html, body { width:1080px; height:1920px; overflow:hidden; background:#0a0a0e; }
+  body { font-family:'Be Vietnam Pro', system-ui, sans-serif; }
+  .stage { position:relative; width:1080px; height:1920px; overflow:hidden; }
+  #bg { position:absolute; inset:0; width:100%; height:100%; background-size:cover; background-position:center;
+    transform-origin:center; will-change:transform,filter; @@BG_STYLE@@ }
+  /* scrim chéo: tối góc trái-dưới (chừa nhân vật phải-trên) */
+  .scrim { position:absolute; inset:0; background:
+    linear-gradient(115deg, rgba(8,8,12,0.92) 0%, rgba(8,8,12,0.6) 34%, rgba(8,8,12,0) 60%),
+    linear-gradient(0deg, rgba(8,8,12,0.9) 0%, rgba(8,8,12,0) 42%); }
+  #dark { position:absolute; inset:0; background:#000; will-change:opacity; }
+  #flash { position:absolute; inset:0; background:#fff; opacity:0; pointer-events:none; }
+
+  /* rail dọc trái (tên game) */
+  #kicker { position:absolute; left:46px; bottom:150px; writing-mode:vertical-rl; transform:rotate(180deg);
+    font-weight:800; font-size:24px; letter-spacing:8px; text-transform:uppercase; color:var(--accent);
+    padding:18px 0; border-top:3px solid var(--accent); will-change:transform,opacity; }
+  /* thanh accent dọc cạnh content */
+  .bar { position:absolute; left:96px; bottom:150px; width:6px; background:var(--accent);
+    box-shadow:0 0 22px var(--accent); transform-origin:bottom; will-change:transform,opacity; }
+
+  .content { position:absolute; left:128px; right:120px; bottom:150px;
+    display:flex; flex-direction:column; align-items:flex-start; text-align:left; gap:20px; }
+  #title { font-family:'Archivo Black', sans-serif; font-weight:400; font-size:118px; line-height:0.92;
+    letter-spacing:-2px; text-transform:uppercase; max-width:760px; }
+  .tw { display:inline-block; will-change:transform,opacity,filter; }
+  #title .tt-em { color:var(--accent); }
+  #subtitle { font-weight:700; font-size:36px; line-height:1.25; color:#eceef5; max-width:680px;
+    text-shadow:0 2px 12px rgba(0,0,0,0.8); will-change:transform,opacity,filter; }
+  .meta { display:flex; align-items:baseline; gap:18px; flex-wrap:wrap; will-change:transform,opacity,filter; }
+  .chip { font-weight:800; font-size:30px; color:#fff; }
+  .chip:first-child { font-size:40px; color:var(--accent); padding-bottom:4px; border-bottom:4px solid var(--accent); }
+  .chip b { color:inherit; }
+  .highlights { display:flex; flex-direction:column; gap:11px; align-items:flex-start; }
+  .hl { font-weight:600; font-size:31px; color:#f4f6ff; display:flex; align-items:center; gap:14px;
+    will-change:transform,opacity; text-shadow:0 2px 10px rgba(0,0,0,0.75); }
+  .hl .dot { width:22px; height:3px; background:var(--accent); flex:none; }
+  #cta { margin-top:10px; font-weight:800; font-size:38px; letter-spacing:0.5px; text-transform:uppercase; color:#0a0a0e;
+    padding:18px 48px; background:var(--accent); will-change:transform,opacity;
+    box-shadow:0 12px 32px rgba(0,0,0,0.5); }
+</style>
+</head>
+<body>
+  <div class="stage">
+    <div id="bg"></div>
+    <div class="scrim"></div>
+    <div id="dark"></div>
+    <div id="kicker">@@KICKER@@</div>
+    <div class="bar" id="bar"></div>
+    <div class="content">
+      <h1 id="title" class="tt-outline">@@TITLE@@</h1>
+      @@SUBTITLE_BLOCK@@
+      @@META_BLOCK@@
+      @@HIGHLIGHTS_BLOCK@@
+      <div id="cta">@@CTA@@</div>
+    </div>
+    <div id="flash"></div>
+  </div>
+<script>@@TIMELINE_JS@@</script>
+<script>
+  var BPM = 100, PULSE_AMP = 0.008, FLASH_BEATS = [];
+  window.DURATION_SEC = @@DURATION_SEC@@;
+
+  window.seek = function (t) {
+    window._T = t; var B = window.BT;
+    // editorial: sạch — không flash, shake tắt, drift nhẹ
+    var rv = B.bg(t, { bpm: BPM, pulseAmp: PULSE_AMP, fl: 0, shake: false, zoomFrom: 1.04, zoomTo: 1.12, driftY: 6 });
+
+    // rail + thanh accent wipe lên
+    B.entrance(t, 'kicker', 0.3, 0.6, 30);
+    var bar = document.getElementById('bar');
+    if (bar) { var bp = B.seg(t, 0.2, 0.7); bar.style.opacity = bp;
+      // chiều cao bám theo content (~ tới title): scaleY
+      bar.style.height = (560 * bp) + 'px'; }
+
+    B.entranceWords(t, 0.5, 0.1, 46);
+    B.entrance(t, 'subtitle', 1.05, 0.6, 22);
+    B.entrance(t, 'period', 1.35, 0.55, 20);
+    var items = document.querySelectorAll('.hl'), i;
+    for (i = 0; i < items.length; i++) { var p = B.seg(t, 1.6 + i * 0.2, 0.5);
+      items[i].style.opacity = p; items[i].style.transform = 'translateX(' + B.lerp(-28, 0, p) + 'px)'; }
+    var cs = 1.6 + items.length * 0.2 + 0.2, cp = B.seg(t, cs, 0.55);
+    B.set('cta', cp, B.lerp(-28, 0, cp), 0, 1);
+  };
+
+  window.BT.init({ emphasis: 'last', maxFont: 126, minFont: 64, maxW: 760 });
+  window.seek(0);
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(function () { window.BT.autofitTitle({ maxFont: 126, minFont: 64, maxW: 760 }); window.BT.fitHighlights(420); window.seek(window._T || 0); });
+</script>
+</body>
+</html>

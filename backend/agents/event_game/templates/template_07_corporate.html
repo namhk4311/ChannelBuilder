@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@500;600;700;800;900&display=swap" rel="stylesheet" />
+<style>
+  :root { --primary:@@PRIMARY@@; --secondary:@@SECONDARY@@; --accent:@@ACCENT@@;
+    --bg:@@BG@@; --text:@@TEXT@@; --muted:@@MUTED@@; --pattern:@@PATTERN@@;
+    --tt-accent:var(--accent); --tt-on-accent:var(--bg);
+    --tt-grad-a:var(--accent); --tt-grad-b:var(--text); }
+  @@TREATMENTS_CSS@@
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html, body { width:1080px; height:1920px; overflow:hidden; background:var(--bg); }
+  body { font-family:'Be Vietnam Pro', system-ui, sans-serif; color:var(--text); }
+  .stage { position:relative; width:1080px; height:1920px; overflow:hidden; background:var(--bg); }
+  .pattern { position:absolute; inset:0;
+    background-image:
+      repeating-linear-gradient(45deg, var(--pattern) 0 1px, transparent 1px 26px),
+      repeating-linear-gradient(-45deg, var(--pattern) 0 1px, transparent 1px 26px); }
+  .glow { position:absolute; top:-180px; right:-180px; width:760px; height:760px; border-radius:50%;
+    background:radial-gradient(circle, var(--accent) 0%, transparent 62%); opacity:0.18; }
+  #dark { position:absolute; inset:0; background:var(--bg); will-change:opacity; }
+  #flash { position:absolute; inset:0; background:#fff; opacity:0; pointer-events:none; }
+
+  .content { position:absolute; left:88px; right:88px; bottom:330px;
+    display:flex; flex-direction:column; align-items:flex-start; gap:28px; }
+  #kicker { font-weight:700; font-size:32px; letter-spacing:6px; text-transform:uppercase; color:var(--accent);
+    will-change:transform,opacity,filter; }
+  #title { font-weight:900; font-size:118px; line-height:0.96; letter-spacing:-2px; max-width:900px;
+    will-change:transform,opacity,filter; }
+  #subtitle { font-weight:600; font-size:40px; line-height:1.3; color:var(--muted); max-width:840px;
+    will-change:transform,opacity,filter; }
+  .meta { display:flex; gap:14px; flex-wrap:wrap; will-change:transform,opacity; }
+  .chip { font-weight:700; font-size:28px; padding:9px 22px; background:var(--accent); color:var(--bg); }
+  .highlights { display:flex; flex-direction:column; gap:14px; align-items:flex-start; will-change:transform; }
+  .hl { font-weight:600; font-size:34px; line-height:1.22; color:var(--text); display:flex;
+    align-items:flex-start; gap:16px; will-change:transform,opacity; }
+  .hl .dot { width:12px; height:12px; background:var(--accent); flex:none; margin-top:0.4em; transform:rotate(45deg); }
+  #cta { position:absolute; left:88px; bottom:240px; font-weight:800; font-size:40px; letter-spacing:0.5px;
+    color:var(--accent); border-bottom:5px solid var(--accent); padding-bottom:6px; will-change:transform,opacity; }
+  #caption { position:absolute; left:70px; right:70px; bottom:120px; text-align:center; font-weight:700;
+    font-size:42px; line-height:1.25; color:var(--text); opacity:0; }
+</style>
+</head>
+<body>
+  <div class="stage">
+    <div class="pattern"></div>
+    <div class="glow"></div>
+    <div class="content">
+      <div id="kicker">@@KICKER@@</div>
+      <h1 id="title" class="tt-gradient">@@TITLE@@</h1>
+      @@SUBTITLE_BLOCK@@
+      @@HIGHLIGHTS_BLOCK@@
+      @@META_BLOCK@@
+    </div>
+    <div id="cta">@@CTA@@</div>
+    <div id="caption"></div>
+    <div id="dark"></div>
+    <div id="flash"></div>
+  </div>
+<script>@@TIMELINE_JS@@</script>
+<script>
+  window.DURATION_SEC = @@DURATION_SEC@@;
+  var CAPS = @@CAPTIONS_JSON@@;
+  var FIT = { maxFont: 118, minFont: 58, maxW: 900 };
+
+  window.seek = function (t) {
+    var B = window.BT;
+    B.bg(t, { fl: 0 });
+    B.entrance(t, 'kicker', 0.25, 0.5, -26);
+    B.entrance(t, 'title', 0.45, 0.6, 34);     // tt-gradient → giữ title 1 khối (splitTitle:false)
+    B.entrance(t, 'subtitle', 1.0, 0.55, 24);
+    var items = document.querySelectorAll('.hl'), i;
+    for (i = 0; i < items.length; i++) { var p = B.seg(t, 1.2 + i * 0.18, 0.5);
+      items[i].style.opacity = p; items[i].style.transform = 'translateX(' + B.lerp(-28, 0, p) + 'px)'; }
+    B.entrance(t, 'period', 1.35, 0.5, 20);
+    B.entrance(t, 'cta', 1.55, 0.5, 22);
+    B.caption(t, CAPS, 'caption');
+  };
+
+  window.BT.init({ splitTitle: false, emberCount: 0, maxFont: FIT.maxFont, minFont: FIT.minFont, maxW: FIT.maxW });
+  window.seek(0);
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(function () {
+    window.BT.autofitTitle(FIT); window.BT.fitHighlights(420); window.seek(window._T || 0); });
+</script>
+</body>
+</html>

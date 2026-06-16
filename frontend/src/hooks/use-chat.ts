@@ -66,6 +66,9 @@ export function useSendMessage(id: string | null) {
     onSuccess: (s) => {
       qc.setQueryData(['chat', s.id], s)
       qc.invalidateQueries({ queryKey: ['chat', 'list'] }) // title + thứ tự cập nhật
+      // Ép refetch run khi vừa start pipeline — kể cả khi run_id KHÔNG đổi chuỗi
+      // (id reset sau restart → trùng id cũ đang lỗi/404 → query không tự refetch).
+      if (s.run_id) qc.invalidateQueries({ queryKey: ['workflow', 'run', s.run_id] })
     },
   })
 }

@@ -130,6 +130,34 @@ export interface RunSummary {
   steps: Pick<RunStep, 'id' | 'agent' | 'code' | 'title' | 'status'>[]
 }
 
+/** Loại video: vlog = ghép clip có sẵn · info = video thông tin (gen ảnh / nền brand). */
+export type VideoMode = 'vlog' | 'info'
+
+/** Phong cách hình ảnh cho video thông tin: image = gen ảnh AI · solid = nền brand đơn sắc. */
+export type VisualStyle = 'image' | 'solid'
+
+/** Option cho form "Video thông tin" — lấy từ GET /workflow/info-options (single source of truth). */
+export interface InfoVisualStyleOption {
+  value: VisualStyle
+  label: string
+  hint: string
+  scenes: number[]
+  scene_default: number
+  needs_brand: boolean
+}
+
+export interface InfoBrandOption {
+  value: string
+  label: string
+}
+
+export interface InfoOptions {
+  visual_styles: InfoVisualStyleOption[]
+  brands: InfoBrandOption[]
+  default_visual_style: VisualStyle
+  default_brand: string
+}
+
 export interface StartRunBody {
   topic?: string | null
   library: string
@@ -141,9 +169,17 @@ export interface StartRunBody {
   review_script?: boolean // dừng gate cho human duyệt/sửa kịch bản (Chat tab)
   publish_mode?: PublishMode // review_publish (đăng ngay) | schedule (lên lịch)
   qc_mode?: QcMode // auto (AI tự sửa) | confirm (dừng gate QC)
+  // Video thông tin (mode='info') — bỏ qua khi vlog.
+  mode?: VideoMode
+  event_text?: string | null
+  visual_style?: VisualStyle
+  brand?: string
+  n_scenes?: number
 }
 
 export const fetchAgents = () => get<{ agents: Agent[] }>('/workflow/agents')
+
+export const fetchInfoOptions = () => get<InfoOptions>('/workflow/info-options')
 
 export const fetchRuns = () => get<{ runs: RunSummary[] }>('/workflow/runs')
 

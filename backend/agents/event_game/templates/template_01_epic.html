@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;600;800;900&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --primary: @@PRIMARY@@;
+    --secondary: @@SECONDARY@@;
+    --accent: @@ACCENT@@;
+  }
+  @@TREATMENTS_CSS@@
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 1080px; height: 1920px; overflow: hidden; background: #000; }
+  body { font-family: 'Be Vietnam Pro', system-ui, sans-serif; }
+
+  .stage { position: relative; width: 1080px; height: 1920px; overflow: hidden; }
+
+  /* Nền ảnh: phủ + zoom/drift/pulse + reveal (set qua seek) */
+  #bg {
+    position: absolute; inset: 0; width: 100%; height: 100%;
+    background-size: cover; background-position: center;
+    transform-origin: center center; will-change: transform, filter;
+    @@BG_STYLE@@
+  }
+  /* Tô tối phần dưới để chữ legible + nhuộm tông theme (đậm hơn để legible trên nền nổ) */
+  .scrim {
+    position: absolute; inset: 0;
+    background:
+      linear-gradient(180deg, rgba(0,0,0,0) 24%, rgba(0,0,0,0.55) 58%, rgba(0,0,0,0.93) 100%),
+      radial-gradient(120% 80% at 50% 16%, rgba(0,0,0,0) 38%, rgba(0,0,0,0.55) 100%);
+  }
+  .tint { position: absolute; inset: 0; background: var(--primary); opacity: 0.18; mix-blend-mode: multiply; }
+  .vignette { position: absolute; inset: 0; box-shadow: inset 0 0 360px 90px rgba(0,0,0,0.72); }
+  .grain { position: absolute; inset: 0; opacity: 0.06; mix-blend-mode: overlay; }
+
+  /* Tàn lửa / tia bay */
+  #embers { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+  .ember { position: absolute; left: 0; top: 0; border-radius: 50%;
+    background: var(--accent); box-shadow: 0 0 12px 2px var(--accent); will-change: transform, opacity; }
+
+  /* Reveal fade-từ-tối + thunder flash */
+  #dark  { position: absolute; inset: 0; background: #000; will-change: opacity; }
+  #flash { position: absolute; inset: 0; background: #fff; opacity: 0; pointer-events: none; will-change: opacity; }
+
+  .content {
+    position: absolute; left: 0; right: 0; bottom: 150px;
+    display: flex; flex-direction: column; align-items: center;
+    padding: 0 90px; text-align: center; gap: 22px;
+  }
+
+  #kicker {
+    font-weight: 800; font-size: 30px; letter-spacing: 6px; text-transform: uppercase;
+    color: var(--accent); padding: 10px 26px; border: 2px solid var(--accent);
+    border-radius: 999px; background: rgba(0,0,0,0.30); backdrop-filter: blur(2px);
+    will-change: transform, opacity, filter;
+  }
+
+  #title {
+    font-weight: 900; font-size: 96px; line-height: 1.0; letter-spacing: -1px;
+    text-transform: uppercase; max-width: 900px; color: var(--accent);
+    text-wrap: balance;
+    /* text-shadow (fire-glow) set động trong seek */
+  }
+  .tw { display: inline-block; will-change: transform, opacity, filter; }
+
+  .rule { width: 140px; height: 5px; border-radius: 4px; background: var(--accent);
+          box-shadow: 0 0 24px var(--accent); transform-origin: center; will-change: opacity, transform; }
+
+  #subtitle { font-weight: 600; font-size: 38px; line-height: 1.25; color: #f3f3f8;
+              max-width: 820px; text-shadow: 0 2px 14px rgba(0,0,0,0.8);
+              will-change: transform, opacity, filter; }
+
+  .meta { display: flex; gap: 18px; flex-wrap: wrap; justify-content: center;
+          will-change: transform, opacity, filter; }
+  .chip { font-weight: 800; font-size: 30px; color: #fff; padding: 12px 26px;
+          border-radius: 14px; background: rgba(0,0,0,0.34);
+          border: 1px solid rgba(255,255,255,0.26); backdrop-filter: blur(3px); }
+  .chip b { color: var(--accent); }
+
+  .highlights { display: flex; flex-direction: column; gap: 14px; align-items: center; margin-top: 4px; }
+  .hl { font-weight: 600; font-size: 33px; color: #fdfdff;
+        display: flex; align-items: center; gap: 16px; will-change: transform, opacity;
+        text-shadow: 0 2px 12px rgba(0,0,0,0.7); }
+  .hl .dot { width: 13px; height: 13px; background: var(--accent); transform: rotate(45deg);
+             box-shadow: 0 0 14px var(--accent); flex: none; }
+
+  #cta {
+    margin-top: 16px; font-weight: 900; font-size: 40px; letter-spacing: 0.5px; color: #15131f;
+    padding: 22px 56px; border-radius: 18px;
+    background: linear-gradient(180deg, #ffffff 0%, var(--accent) 100%);
+    box-shadow: 0 14px 40px rgba(0,0,0,0.5), 0 0 40px rgba(255,255,255,0.18);
+    will-change: transform, opacity;
+  }
+</style>
+</head>
+<body>
+  <div class="stage">
+    <div id="bg"></div>
+    <div class="scrim"></div>
+    <div class="tint"></div>
+    <div class="vignette"></div>
+    <svg class="grain" xmlns="http://www.w3.org/2000/svg">
+      <filter id="n"><feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" stitchTiles="stitch"/></filter>
+      <rect width="100%" height="100%" filter="url(#n)"/>
+    </svg>
+    <div id="embers"></div>
+    <div id="dark"></div>
+
+    <div class="content">
+      <div id="kicker">@@KICKER@@</div>
+      <h1 id="title">@@TITLE@@</h1>
+      <div class="rule" id="rule"></div>
+      @@SUBTITLE_BLOCK@@
+      @@META_BLOCK@@
+      @@HIGHLIGHTS_BLOCK@@
+      <div id="cta">@@CTA@@</div>
+    </div>
+
+    <div id="flash"></div>
+  </div>
+
+<script>@@TIMELINE_JS@@</script>
+<script>
+  // ── Config khẩu vị (chỉnh tự do, không đụng logic) ──
+  var BPM = 120;            // nhịp pulse nền
+  var PULSE_AMP = 0.012;    // biên phóng to/nhỏ theo nhịp
+  var PARTICLE_COUNT = 42;  // số tàn lửa
+  var FLASH_BEATS = [0.2, 1.35];  // mốc thunder flash (giây) — tối đa ~2, tránh strobe
+  window.DURATION_SEC = @@DURATION_SEC@@;
+
+  var H = 1920, W = 1080;
+
+  function _set(id, op, ty, sc, bl) {
+    var e = document.getElementById(id); if (!e) return;
+    e.style.opacity = op;
+    e.style.transform = 'translateY(' + ty + 'px) scale(' + sc + ')';
+    e.style.filter = bl > 0.05 ? 'blur(' + bl + 'px)' : 'none';
+  }
+  function _entrance(id, start, dur, fromY) {
+    var B = window.BT, p = B.seg(window._T, start, dur);
+    _set(id, p, B.lerp(fromY, 0, p), B.lerp(0.96, 1, p), B.lerp(8, 0, p));
+  }
+
+  // Split title → từng từ (cho entrance slam) + auto-fit cỡ chữ (hết rớt chữ)
+  function _esc(s){ var d=document.createElement('div'); d.textContent=s; return d.innerHTML; }
+  function splitTitle() {
+    var title = document.getElementById('title');
+    var words = title.textContent.trim().split(/\s+/);
+    title.innerHTML = words.map(function (w) { return '<span class="tw">' + _esc(w) + '</span>'; }).join(' ');
+  }
+  function autofit() {
+    var title = document.getElementById('title');
+    var fs = 96; title.style.fontSize = fs + 'px';
+    // giảm dần đến khi không tràn ngang & cao <= ~2.3 dòng
+    while (fs > 54) {
+      if (title.scrollWidth <= 902 && title.offsetHeight <= fs * 1.0 * 2.35) break;
+      fs -= 3; title.style.fontSize = fs + 'px';
+    }
+  }
+  function buildEmbers() {
+    var box = document.getElementById('embers'), B = window.BT;
+    for (var i = 0; i < PARTICLE_COUNT; i++) {
+      var s = 2 + B.hash(i + 3) * 5;
+      var d = document.createElement('div');
+      d.className = 'ember'; d.style.width = s + 'px'; d.style.height = s + 'px';
+      box.appendChild(d);
+    }
+  }
+
+  function _entranceWords(t) {
+    var B = window.BT, ws = document.querySelectorAll('#title .tw');
+    for (var i = 0; i < ws.length; i++) {
+      var p = B.seg(t, 0.5 + i * 0.12, 0.55);
+      ws[i].style.opacity = p;
+      ws[i].style.transform = 'translateY(' + B.lerp(42, 0, p) + 'px) scale(' + B.lerp(1.22, 1, p) + ')';
+      ws[i].style.filter = p < 0.95 ? 'blur(' + B.lerp(10, 0, p) + 'px)' : 'none';
+    }
+  }
+
+  window.seek = function (t) {
+    window._T = t;
+    var B = window.BT;
+    var D = Math.max(window.DURATION_SEC || 12, 0.001);
+
+    // thunder flash (max qua các beat) + shake gated theo flash
+    var fl = 0, k;
+    for (k = 0; k < FLASH_BEATS.length; k++) { var v = B.flash(t, FLASH_BEATS[k]); if (v > fl) fl = v; }
+    var fi = Math.floor(t * 60);
+    var shx = fl * (B.hash(fi) - 0.5) * 18;
+    var shy = fl * (B.hash(fi + 99) - 0.5) * 18;
+
+    // reveal (fade từ tối + zoom punch-in)
+    var rv = B.seg(t, 0, 0.9);
+    var dark = document.getElementById('dark'); if (dark) dark.style.opacity = 1 - rv;
+
+    // nền: reveal scale → (slow zoom + pulse nhịp) + drift + shake; flash brighten
+    var bp = B.clamp01(t / D);
+    var baseZoom = B.lerp(1.06, 1.16, bp) + B.pulse(t, BPM, PULSE_AMP);
+    var scale = B.lerp(1.28, baseZoom, rv);
+    var bg = document.getElementById('bg');
+    bg.style.transform = 'scale(' + scale + ') translate(' + shx + 'px,' + (shy + B.lerp(-10, 10, bp)) + 'px)';
+    bg.style.filter = 'blur(' + B.lerp(14, 0, rv) + 'px) brightness(' + (1 + fl * 0.55) + ')';
+
+    var flash = document.getElementById('flash'); if (flash) flash.style.opacity = Math.min(fl * 0.85, 0.85);
+
+    // embers: bay lên + drift + twinkle (đều f(t,i))
+    var box = document.getElementById('embers'), kids = box ? box.children : [];
+    for (var i = 0; i < kids.length; i++) {
+      var hp = B.hash(i + 7), hf = B.hash(i + 11);
+      var x = B.hash(i) * W;
+      var speed = 60 + B.hash(i + 3) * 120;          // px/s đi lên
+      var span = H + 80;
+      var y = H - (((t * speed) + hp * span) % span);
+      var drift = Math.sin(t * (0.6 + hf) + hp * 6.28) * 22;
+      var twk = 0.35 + 0.4 * (0.5 + 0.5 * Math.sin(t * (2 + hf * 3) + hp * 6.28));
+      kids[i].style.transform = 'translate(' + (x + drift) + 'px,' + y + 'px)';
+      kids[i].style.opacity = twk * rv * B.clamp01(y / 220);
+    }
+
+    // chữ
+    _entrance('kicker', 0.25, 0.6, 26);
+    _entranceWords(t);
+    var rule = document.getElementById('rule');
+    if (rule) { var rp = B.seg(t, 0.95, 0.6); rule.style.opacity = rp; rule.style.transform = 'scaleX(' + rp + ')'; }
+    _entrance('subtitle', 1.0, 0.7, 26);
+    _entrance('period', 1.35, 0.6, 22);
+
+    var items = document.querySelectorAll('.hl');
+    for (i = 0; i < items.length; i++) {
+      var hpp = B.seg(t, 1.65 + i * 0.25, 0.55);
+      items[i].style.opacity = hpp;
+      items[i].style.transform = 'translateX(' + B.lerp(-32, 0, hpp) + 'px)';
+    }
+    var ctaStart = 1.65 + items.length * 0.25 + 0.2;
+    var cp = B.seg(t, ctaStart, 0.6), pulse = 1 + 0.03 * Math.sin(t * 3.2);
+    var cta = document.getElementById('cta');
+    if (cta) { cta.style.opacity = cp; cta.style.transform = 'translateY(' + B.lerp(22, 0, cp) + 'px) scale(' + (cp * pulse) + ')'; }
+
+    // title fire-glow: warm glow flicker theo sin(t) + bùng khi flash
+    var title = document.getElementById('title');
+    if (title) {
+      var glow = 16 + 8 * Math.sin(t * 7.0) + fl * 42;
+      var warm = 0.55 + 0.18 * Math.sin(t * 9.0);
+      title.style.textShadow =
+        '0 0 ' + glow + 'px rgba(255,170,60,' + warm + '),' +
+        '0 0 ' + (glow * 2) + 'px rgba(255,90,20,' + (warm * 0.5) + '),' +
+        '0 3px 18px rgba(0,0,0,0.6)';
+    }
+  };
+
+  // init: split + (autofit sau khi font load) + embers + frame 0
+  splitTitle();
+  buildEmbers();
+  autofit();
+  window.seek(0);
+  if (document.fonts && document.fonts.ready) {
+    document.fonts.ready.then(function () { autofit(); window.BT.fitHighlights(420); window.seek(window._T || 0); });
+  }
+</script>
+</body>
+</html>

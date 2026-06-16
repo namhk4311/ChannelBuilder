@@ -66,6 +66,9 @@ export default function App() {
                 <Route path="schedule" element={<SchedulePage />} />
                 <Route path="studio" element={<StudioPage />} />
                 <Route path="warehouse" element={<WarehousePage />} />
+                {/* Deep-link 1 cuộc chat: /chat_xxx — route tĩnh phía trên luôn
+                    được match trước (React Router rank theo độ cụ thể). */}
+                <Route path=":chatId" element={<ChatPage />} />
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>
               <Toaster richColors closeButton />

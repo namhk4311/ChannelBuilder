@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
+import { useNavigate, useParams } from 'react-router'
 import { ArrowUp, Loader2, Plus, Square, Workflow } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -21,13 +22,15 @@ import {
 import { useChatStore } from '@/stores/chat-store'
 import { DirectorAvatar, MessageBubble } from '@/components/chat/message-bubble'
 import { OptionChips } from '@/components/chat/option-chips'
+import { TrendCard } from '@/components/chat/trend-card'
+import { AnalystCard } from '@/components/chat/analyst-card'
+import { ScheduleCard } from '@/components/chat/schedule-card'
 import { HistorySidebar } from '@/components/chat/history-sidebar'
+import { ChatLanding } from '@/components/chat/chat-landing'
 import { WorkflowPanel } from '@/components/chat/workflow-panel'
 import { IdeaGate } from '@/components/chat/idea-gate'
 import { ScriptGate } from '@/components/chat/script-gate'
 import { ApprovalGate } from '@/components/workflow/approval-gate'
-
-const STARTERS = ['Một ngày ở canteen VNG', 'Góc học tập ở campus', 'Phỏng vấn intern mùa hè']
 
 /**
  * Tab Chat — bố cục 3 cột kiểu cowork: lịch sử (trái) · hội thoại (giữa) ·
@@ -35,8 +38,15 @@ const STARTERS = ['Một ngày ở canteen VNG', 'Góc học tập ở campus', 
  * Lịch sử lưu DB; reload + restart không mất.
  */
 export default function ChatPage() {
-  const sessionId = useChatStore((s) => s.sessionId)
-  const setSessionId = useChatStore((s) => s.setSessionId)
+  // URL là nguồn sự thật cho cuộc đang mở: /chat_xxx. Store chỉ nhớ "cuộc mở
+  // gần nhất" để khi vào "/" trống thì khôi phục (reload / mở lại tab không mất).
+  const { chatId } = useParams<{ chatId: string }>()
+  const navigate = useNavigate()
+  const sessionId = chatId ?? null
+  const lastSessionId = useChatStore((s) => s.sessionId)
+  const setLastSessionId = useChatStore((s) => s.setSessionId)
+  // Mở 1 cuộc = đổi URL → /chat_id (sidebar, mobile select, sau khi tạo).
+  const openSession = (id: string) => navigate(`/${id}`)
   const create = useCreateSession()
   const del = useDeleteSession()
   const sessions = useChatSessions()
@@ -45,7 +55,6 @@ export default function ChatPage() {
   const record = useRecordRun(sessionId)
   const [draft, setDraft] = useState('')
   const scrollRef = useRef<HTMLDivElement>(null)
-  const creating = useRef(false)
   const recorded = useRef<Set<string>>(new Set())
 
   // Kéo co giãn độ rộng panel pipeline (persist localStorage).
@@ -75,29 +84,52 @@ export default function ChatPage() {
     }
   }
 
-  // Tạo session lần đầu (hoặc khi session cũ 404 / đã xoá).
+  // Đồng bộ URL → store: nhớ cuộc đang mở để lần sau vào "/" trống khôi phục lại.
   useEffect(() => {
-    if (sessionId || creating.current) return
-    creating.current = true
-    create.mutate(undefined, {
-      onSuccess: (s) => setSessionId(s.id),
-      onSettled: () => {
-        creating.current = false
-      },
-    })
-  }, [sessionId, create, setSessionId])
+    if (sessionId) setLastSessionId(sessionId)
+  }, [sessionId, setLastSessionId])
 
+  // Vào "/" trống (không có chatId): khôi phục cuộc gần nhất nếu có, ngược lại
+  // tạo cuộc mới — rồi điều hướng tới /chat_id (replace để không kẹt "/" trong back).
+  // Guard bằng state mutation (pending/error) thay vì ref: KHÔNG auto-retry khi
+  // create lỗi (vd backend down) → tránh bắn POST /chat/sessions liên tục.
+  // Lỗi rồi thì user bấm "Mới" để thử lại (handleNew reset state mutation).
+  const createPending = create.isPending
+  const createError = create.isError
+  const createMutate = create.mutate
   useEffect(() => {
-    if (session.isError) setSessionId(null)
-  }, [session.isError, setSessionId])
+    if (chatId) return
+    if (lastSessionId) {
+      navigate(`/${lastSessionId}`, { replace: true })
+      return
+    }
+    if (createPending || createError) return
+    createMutate(undefined, { onSuccess: (s) => navigate(`/${s.id}`, { replace: true }) })
+  }, [chatId, lastSessionId, createPending, createError, createMutate, navigate])
+
+  // Session 404 (id trong URL lạ / đã xoá) → quên cuộc gần nhất + về "/" (tự tạo mới).
+  useEffect(() => {
+    if (!session.isError) return
+    setLastSessionId(null)
+    navigate('/', { replace: true })
+  }, [session.isError, setLastSessionId, navigate])
 
   const data = session.data
   const run = useRun(data?.run_id ?? null)
 
   const messages = data?.messages ?? []
+  // Lời chào mở đầu (assistant) đã được landing page thay thế → ẩn ở khung hội
+  // thoại để tin nhắn ĐẦU TIÊN luôn là của user (không lòi lời chào lên trước).
+  // Session luôn bắt đầu bằng đúng 1 assistant greeting; reply thật luôn đứng SAU
+  // 1 tin user → messages[0].role==='assistant' nhận diện chắc chắn là lời chào.
+  const displayMessages = messages[0]?.role === 'assistant' ? messages.slice(1) : messages
   const ui = data?.ui
   const showChips = ui?.kind === 'choices' && (ui.options?.length ?? 0) > 0 && !send.isPending
-  const showStarters = messages.length <= 1 && !data?.run_id && !send.isPending
+  const showTrend = ui?.kind === 'trend' && !!ui.trend && !send.isPending
+  const showAnalyst = ui?.kind === 'analyst' && !!ui.analyst && !send.isPending
+  const showSchedule = ui?.kind === 'schedule' && !!ui.schedule && !send.isPending
+  // Cuộc còn trống (chỉ có lời chào, chưa start pipeline) → hiện landing page.
+  const showLanding = messages.length <= 1 && !data?.run_id && !send.isPending
   const runData = data?.run_id ? run.data : undefined
   // Pipeline đang xử lý (chưa tới gate / chưa xong) → khoá composer + nút vuông đỏ.
   const processing = runData?.status === 'running'
@@ -132,13 +164,16 @@ export default function ChatPage() {
 
   const handleNew = () => {
     if (create.isPending) return
-    create.mutate(undefined, { onSuccess: (s) => setSessionId(s.id) })
+    create.mutate(undefined, { onSuccess: (s) => openSession(s.id) })
   }
 
   const handleDelete = (id: string) => {
     del.mutate(id, {
       onSuccess: () => {
-        if (id === sessionId) setSessionId(null) // effect tự tạo cuộc mới
+        if (id === sessionId) {
+          setLastSessionId(null) // quên cuộc vừa xoá
+          navigate('/') // effect tự khôi phục cuộc khác / tạo mới
+        }
       },
     })
   }
@@ -151,7 +186,7 @@ export default function ChatPage() {
         <HistorySidebar
           sessions={sessionList}
           activeId={sessionId}
-          onSelect={setSessionId}
+          onSelect={openSession}
           onNew={handleNew}
           onDelete={handleDelete}
           creating={create.isPending}
@@ -165,7 +200,7 @@ export default function ChatPage() {
               <Plus className="size-4" /> Mới
             </Button>
             {sessionList.length > 0 && (
-              <Select value={sessionId ?? ''} onValueChange={setSessionId}>
+              <Select value={sessionId ?? ''} onValueChange={openSession}>
                 <SelectTrigger className="flex-1">
                   <SelectValue placeholder="Lịch sử…" />
                 </SelectTrigger>
@@ -180,9 +215,12 @@ export default function ChatPage() {
             )}
           </div>
 
-          <div ref={scrollRef} className="chat-scroll flex-1 overflow-y-auto">
+          <div ref={scrollRef} className="chat-scroll flex flex-1 flex-col overflow-y-auto">
+            {showLanding ? (
+              <ChatLanding onPick={onSend} disabled={!sessionId || send.isPending} />
+            ) : (
             <div className="mx-auto w-full max-w-4xl space-y-5 px-1 py-2">
-              {messages.map((m, i) => (
+              {displayMessages.map((m, i) => (
                 <MessageBubble key={i} message={m} />
               ))}
 
@@ -190,24 +228,8 @@ export default function ChatPage() {
                 <div className="flex items-center gap-3">
                   <DirectorAvatar />
                   <span className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <Loader2 className="size-4 animate-spin" /> Đạo diễn đang soạn…
+                    <Loader2 className="size-4 animate-spin" /> Đợi mình xíu nha~
                   </span>
-                </div>
-              )}
-
-              {showStarters && (
-                <div className="flex flex-wrap gap-2">
-                  {STARTERS.map((s) => (
-                    <Button
-                      key={s}
-                      variant="outline"
-                      size="sm"
-                      className="h-auto rounded-full py-1.5"
-                      onClick={() => onSend(s)}
-                    >
-                      {s}
-                    </Button>
-                  ))}
                 </div>
               )}
 
@@ -215,12 +237,19 @@ export default function ChatPage() {
                 <OptionChips options={ui!.options} onPick={onSend} disabled={send.isPending} />
               )}
 
+              {showTrend && <TrendCard trend={ui!.trend!} />}
+
+              {showAnalyst && <AnalystCard analyst={ui!.analyst!} />}
+
+              {showSchedule && <ScheduleCard schedule={ui!.schedule!} />}
+
               {/* Gate cần user thao tác → hiện NGAY trong khung chat (mỗi gate tự
                   render null nếu chưa tới lượt). Flow view-only nằm ở sidebar phải. */}
               {runData && <IdeaGate run={runData} />}
               {runData && <ScriptGate run={runData} />}
               {runData && <ApprovalGate run={runData} />}
             </div>
+            )}
           </div>
 
           {/* Composer kiểu ChatGPT — pill bo tròn + nút gửi tròn, ghim đáy khung */}
@@ -230,13 +259,15 @@ export default function ChatPage() {
                 value={draft}
                 onChange={(e) => setDraft(e.target.value)}
                 onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !e.shiftKey) {
+                  // Bỏ qua khi IME (gõ tiếng Việt) còn đang ghép chữ: nếu gửi lúc này,
+                  // IME sẽ commit chữ cuối SAU setDraft('') → chữ cuối "dính" lại ô nhập.
+                  if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
                     e.preventDefault()
                     onSend(draft)
                   }
                 }}
                 placeholder={
-                  processing ? 'Đang tạo video…' : 'Nhập ý tưởng, trả lời, hoặc gõ “tạo đi” / “đăng đi”…'
+                  processing ? 'Đang tạo video…' : 'Bạn cần hỗ trợ gì hôm nay…'
                 }
                 rows={1}
                 className="max-h-40 min-h-9 flex-1 resize-none border-0 bg-transparent px-0 py-1.5 text-sm shadow-none focus-visible:border-0 focus-visible:ring-0"

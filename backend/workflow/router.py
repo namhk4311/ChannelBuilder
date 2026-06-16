@@ -13,7 +13,7 @@ from datetime import datetime
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from . import runner
 from .catalog import get_agents
@@ -42,6 +42,27 @@ class StartRunRequest(BaseModel):
     qc_mode: str = Field("auto",
                          pattern="^(auto|confirm)$",
                          description="QC kịch bản: 'auto' (AI tự sửa lỗi nặng rồi dựng) | 'confirm' (dừng gate cho human duyệt/viết lại)")
+    # Video thông tin (mode="info") — mirror các field chat conductor đã đẩy xuống runner.
+    # mode="vlog" (mặc định, ghép clip) | "info" (gen ảnh AI / nền brand + banner động).
+    mode: str = Field("vlog", pattern="^(vlog|info)$",
+                         description="Loại video: 'vlog' (clip có sẵn) | 'info' (video thông tin)")
+    event_text: Optional[str] = Field(None,
+                         description="Nội dung thông tin (chỉ dùng khi mode='info', tối thiểu ~20 ký tự)")
+    visual_style: str = Field("image", pattern="^(image|solid)$",
+                         description="Phong cách hình ảnh info: 'image' (gen ảnh AI 1-3 cảnh) | 'solid' (nền brand 3-5 cảnh)")
+    brand: str = Field("vng",
+                         description="Brand theme cho visual_style='solid' (vng/anthropic/neutral_dark/neutral_light)")
+    n_scenes: Optional[int] = Field(None, ge=1, le=8,
+                         description="Số cảnh info — None → mặc định theo visual_style. Server clamp về dải hợp lệ của style.")
+
+    @field_validator("brand")
+    @classmethod
+    def _brand_known(cls, v: str) -> str:
+        # Brand lạ → 422 thay vì âm thầm fallback (chỉ check khi field được gửi; default 'vng' luôn hợp lệ).
+        from agents.event_game.visual_styles import BRAND_THEMES
+        if v not in BRAND_THEMES:
+            raise ValueError(f"brand không hợp lệ: {v!r} (hợp lệ: {', '.join(BRAND_THEMES)})")
+        return v
 
 
 class ApprovalRequest(BaseModel):
@@ -73,17 +94,46 @@ def workflow_agents() -> dict:
     return {"agents": get_agents()}
 
 
+@router.get("/info-options")
+def info_options() -> dict:
+    """Option cho form 'Video thông tin' — single source of truth = visual_styles.py.
+    Frontend render dropdown visual_style / brand / n_scenes từ đây (không hardcode → không lệch)."""
+    from agents.event_game.visual_styles import (
+        VISUAL_STYLES, BRAND_THEMES, DEFAULT_VISUAL_STYLE, DEFAULT_BRAND,
+    )
+    return {
+        "visual_styles": [
+            {"value": k, "label": v["label"], "hint": v["hint"],
+             "scenes": list(v["scenes"]), "scene_default": v["scene_default"],
+             "needs_brand": v["theme"] == "brand"}
+            for k, v in VISUAL_STYLES.items()
+        ],
+        "brands": [{"value": k, "label": v["label"]} for k, v in BRAND_THEMES.items()],
+        "default_visual_style": DEFAULT_VISUAL_STYLE,
+        "default_brand": DEFAULT_BRAND,
+    }
+
+
 @router.post("/runs")
 def start_run(req: StartRunRequest) -> dict:
     topic = (req.topic or "").strip() or None
-    return runner.start_run(topic=topic, library=req.library,
-                            subtitles=req.subtitles, n_ideas=req.n_ideas,
-                            music_track_id=req.music_track_id,
-                            beat_sync=req.beat_sync,
-                            music_volume=req.music_volume,
-                            review_script=req.review_script,
-                            publish_mode=req.publish_mode,
-                            qc_mode=req.qc_mode)
+    event_text = (req.event_text or "").strip() or None
+    kwargs = dict(topic=topic, library=req.library,
+                  subtitles=req.subtitles, n_ideas=req.n_ideas,
+                  music_track_id=req.music_track_id,
+                  beat_sync=req.beat_sync,
+                  music_volume=req.music_volume,
+                  review_script=req.review_script,
+                  publish_mode=req.publish_mode,
+                  qc_mode=req.qc_mode,
+                  mode=req.mode, event_text=event_text,
+                  visual_style=req.visual_style, brand=req.brand)
+    # Info: clamp n_scenes về dải hợp lệ của visual_style (None → scene_default) — REST không
+    # qua conductor nên phải tự chốt giống chat. Vlog bỏ qua (pipeline vlog không dùng n_scenes).
+    if req.mode == "info":
+        from agents.event_game.visual_styles import clamp_scenes
+        kwargs["n_scenes"] = clamp_scenes(req.visual_style, req.n_scenes)
+    return runner.start_run(**kwargs)
 
 
 @router.get("/runs")

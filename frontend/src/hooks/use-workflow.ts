@@ -4,6 +4,7 @@ import {
   decideIdea,
   decideScript,
   fetchAgents,
+  fetchInfoOptions,
   fetchRun,
   fetchRuns,
   regenerateScript,
@@ -20,6 +21,15 @@ export function useAgents() {
     queryFn: fetchAgents,
     select: (d) => d.agents,
     staleTime: 60_000,
+  })
+}
+
+/** Option cho form "Video thông tin" — gần như tĩnh nên staleTime dài. */
+export function useInfoOptions() {
+  return useQuery({
+    queryKey: ['workflow', 'info-options'],
+    queryFn: fetchInfoOptions,
+    staleTime: 5 * 60_000,
   })
 }
 

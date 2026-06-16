@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=Be+Vietnam+Pro:wght@500;700;800&display=swap" rel="stylesheet" />
+<style>
+  :root { --primary: @@PRIMARY@@; --secondary: @@SECONDARY@@; --accent: @@ACCENT@@;
+    --tt-foil-a:#a9760a; --tt-foil-b:#fff3c4; --tt-foil-c:#ffd24a; }
+  @@TREATMENTS_CSS@@
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html, body { width:1080px; height:1920px; overflow:hidden; background:#08060f; }
+  body { font-family:'Be Vietnam Pro', system-ui, sans-serif; }
+  .stage { position:relative; width:1080px; height:1920px; overflow:hidden; }
+  #bg { position:absolute; inset:0; width:100%; height:100%; background-size:cover; background-position:center;
+    transform-origin:center; will-change:transform,filter; @@BG_STYLE@@ }
+  .scrim { position:absolute; inset:0; background:
+    linear-gradient(180deg, rgba(8,6,15,0.25) 0%, rgba(8,6,15,0) 28%, rgba(8,6,15,0.6) 62%, rgba(6,5,12,0.94) 100%); }
+  .tint { position:absolute; inset:0; background:var(--primary); opacity:0.2; mix-blend-mode:multiply; }
+  .vignette { position:absolute; inset:0; box-shadow:inset 0 0 360px 100px rgba(0,0,0,0.78); }
+  #embers { position:absolute; inset:0; overflow:hidden; pointer-events:none; }
+  .ember { position:absolute; left:0; top:0; border-radius:50%; background:var(--accent);
+    box-shadow:0 0 12px 2px var(--accent); will-change:transform,opacity; }
+  /* khung poster */
+  .frame { position:absolute; inset:34px; border:3px solid rgba(255,214,90,0.55); pointer-events:none; }
+  .frame::before { content:''; position:absolute; inset:9px; border:1px solid rgba(255,214,90,0.32); }
+  .corner { position:absolute; width:26px; height:26px; border:3px solid var(--accent); }
+  .corner.tl{ left:24px; top:24px; border-right:0; border-bottom:0; }
+  .corner.tr{ right:24px; top:24px; border-left:0; border-bottom:0; }
+  .corner.bl{ left:24px; bottom:24px; border-right:0; border-top:0; }
+  .corner.br{ right:24px; bottom:24px; border-left:0; border-top:0; }
+  /* emblem rays sau title */
+  #emblem { position:absolute; left:50%; top:64%; width:920px; height:920px; transform:translate(-50%,-50%);
+    background:repeating-conic-gradient(rgba(255,214,90,0.20) 0deg 2.4deg, transparent 2.4deg 9deg);
+    -webkit-mask:radial-gradient(circle, #000 0 24%, transparent 60%); mask:radial-gradient(circle, #000 0 24%, transparent 60%);
+    will-change:transform,opacity; }
+  #dark { position:absolute; inset:0; background:#000; will-change:opacity; }
+  #flash { position:absolute; inset:0; background:#fff; opacity:0; pointer-events:none; will-change:opacity; }
+
+  .content { position:absolute; left:0; right:0; bottom:170px; display:flex; flex-direction:column;
+    align-items:center; text-align:center; padding:0 90px; gap:22px; }
+  #kicker { font-weight:800; font-size:28px; letter-spacing:7px; text-transform:uppercase; color:var(--accent);
+    padding:9px 26px; border:1px solid var(--accent); border-radius:2px; background:rgba(0,0,0,0.34);
+    will-change:transform,opacity,filter; }
+  #title { font-family:'Playfair Display', serif; font-weight:900; font-size:104px; line-height:0.98;
+    max-width:900px; text-transform:uppercase; letter-spacing:1px; text-wrap:balance;
+    will-change:transform,opacity,filter,background-position; }
+  .rule { width:200px; height:2px; background:linear-gradient(90deg,transparent,var(--accent),transparent);
+    position:relative; will-change:opacity,transform; }
+  .rule::before { content:'◆'; position:absolute; left:50%; top:50%; transform:translate(-50%,-50%);
+    color:var(--accent); font-size:18px; text-shadow:0 0 14px var(--accent); }
+  #subtitle { font-family:'Playfair Display',serif; font-style:italic; font-weight:700; font-size:38px; line-height:1.3;
+    color:#f6f0e2; max-width:780px; text-shadow:0 2px 14px rgba(0,0,0,0.8); will-change:transform,opacity,filter; }
+  .meta { display:flex; gap:18px; flex-wrap:wrap; justify-content:center; will-change:transform,opacity,filter; }
+  .chip { font-weight:800; font-size:30px; color:#fff; padding:11px 26px; border-radius:8px;
+    background:rgba(0,0,0,0.4); border:1px solid rgba(255,214,90,0.45); }
+  .chip b { color:var(--accent); }
+  .highlights { display:flex; flex-direction:column; gap:13px; align-items:center; }
+  .hl { font-weight:600; font-size:32px; color:#fdf8ec; display:flex; align-items:center; gap:14px;
+    will-change:transform,opacity; text-shadow:0 2px 12px rgba(0,0,0,0.75); }
+  .hl .dot { color:var(--accent); flex:none; }
+  .hl .dot::before { content:'◆'; font-size:16px; text-shadow:0 0 12px var(--accent); }
+  #cta { margin-top:10px; font-weight:900; font-size:38px; letter-spacing:1px; text-transform:uppercase; color:#3a2606;
+    padding:20px 70px; background:linear-gradient(180deg,#fff3c4,var(--accent));
+    clip-path:polygon(7% 0, 93% 0, 100% 50%, 93% 100%, 7% 100%, 0 50%);
+    box-shadow:0 12px 36px rgba(0,0,0,0.55); will-change:transform,opacity; }
+</style>
+</head>
+<body>
+  <div class="stage">
+    <div id="bg"></div>
+    <div class="scrim"></div>
+    <div class="tint"></div>
+    <div class="vignette"></div>
+    <div id="embers"></div>
+    <div id="emblem"></div>
+    <div class="frame"></div>
+    <div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div>
+    <div id="dark"></div>
+    <div class="content">
+      <div id="kicker">@@KICKER@@</div>
+      <h1 id="title" class="tt-foil">@@TITLE@@</h1>
+      <div class="rule" id="rule"></div>
+      @@SUBTITLE_BLOCK@@
+      @@META_BLOCK@@
+      @@HIGHLIGHTS_BLOCK@@
+      <div id="cta">@@CTA@@</div>
+    </div>
+    <div id="flash"></div>
+  </div>
+<script>@@TIMELINE_JS@@</script>
+<script>
+  var BPM = 116, PULSE_AMP = 0.013, FLASH_BEATS = [0.25, 1.45];
+  window.DURATION_SEC = @@DURATION_SEC@@;
+
+  window.seek = function (t) {
+    window._T = t; var B = window.BT;
+    var fl = B.flashLevel(t, FLASH_BEATS);
+    var rv = B.bg(t, { bpm: BPM, pulseAmp: PULSE_AMP, fl: fl, zoomFrom: 1.06, zoomTo: 1.17, driftY: 10 });
+    B.embers(t, rv);
+
+    // emblem: hiện dần + xoay chậm + glow nhịp
+    var em = document.getElementById('emblem');
+    if (em) { var ep = B.seg(t, 0.4, 1.1);
+      em.style.opacity = ep * (0.5 + 0.18 * Math.sin(t * 1.6) + fl * 0.6);
+      em.style.transform = 'translate(-50%,-50%) rotate(' + (t * 6) + 'deg) scale(' + B.lerp(0.8, 1, ep) + ')'; }
+
+    B.entrance(t, 'kicker', 0.3, 0.6, 24);
+    // title 1 khối: slam + foil sheen + fire-glow
+    var tp = B.seg(t, 0.55, 0.85);
+    B.set('title', tp, 0, B.lerp(30, 0, tp), B.lerp(1.12, 1, tp), B.lerp(8, 0, tp));
+    B.foilSheen('title', t, 40);
+    var rule = document.getElementById('rule');
+    if (rule) { var rp = B.seg(t, 1.05, 0.6); rule.style.opacity = rp; rule.style.transform = 'scaleX(' + rp + ')'; }
+    B.entrance(t, 'subtitle', 1.15, 0.7, 24);
+    B.entrance(t, 'period', 1.5, 0.6, 22);
+    var items = document.querySelectorAll('.hl'), i;
+    for (i = 0; i < items.length; i++) { var p = B.seg(t, 1.8 + i * 0.24, 0.55);
+      items[i].style.opacity = p; items[i].style.transform = 'translateY(' + B.lerp(18, 0, p) + 'px)'; }
+    var cs = 1.8 + items.length * 0.24 + 0.25, cp = B.seg(t, cs, 0.6), pls = 1 + 0.03 * Math.sin(t * 3.0);
+    B.set('cta', cp, 0, B.lerp(22, 0, cp), cp * pls);
+  };
+
+  window.BT.init({ splitTitle: false, emberCount: 40, maxFont: 110, minFont: 56, maxW: 900 });
+  window.seek(0);
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(function () { window.BT.autofitTitle({ maxFont: 110, minFont: 56, maxW: 900 }); window.BT.fitHighlights(420); window.seek(window._T || 0); });
+</script>
+</body>
+</html>
