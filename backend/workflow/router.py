@@ -39,6 +39,9 @@ class StartRunRequest(BaseModel):
     publish_mode: str = Field("review_publish",
                          pattern="^(review_publish|schedule)$",
                          description="Chế độ đăng: 'review_publish' (duyệt → đăng ngay) | 'schedule' (duyệt → lên lịch)")
+    qc_mode: str = Field("auto",
+                         pattern="^(auto|confirm)$",
+                         description="QC kịch bản: 'auto' (AI tự sửa lỗi nặng rồi dựng) | 'confirm' (dừng gate cho human duyệt/viết lại)")
 
 
 class ApprovalRequest(BaseModel):
@@ -56,7 +59,10 @@ class IdeaDecisionRequest(BaseModel):
 
 
 class ScriptDecisionRequest(BaseModel):
-    approve: bool
+    approve: bool = True
+    decision: Optional[str] = Field(
+        None, pattern="^(approve|regenerate|reject)$",
+        description="'approve' | 'regenerate' (cho [B] viết lại theo QC) | 'reject'. None → dùng `approve` bool")
     script: Optional[str] = Field(None, description="Bản kịch bản đã sửa (optional). None = dùng bản gốc")
     caption: Optional[str] = Field(None, description="Caption đã sửa (optional). None = dùng bản gốc")
     hashtags: Optional[list[str]] = Field(None, description="Hashtag đã sửa (optional). None = dùng bản gốc")
@@ -76,7 +82,8 @@ def start_run(req: StartRunRequest) -> dict:
                             beat_sync=req.beat_sync,
                             music_volume=req.music_volume,
                             review_script=req.review_script,
-                            publish_mode=req.publish_mode)
+                            publish_mode=req.publish_mode,
+                            qc_mode=req.qc_mode)
 
 
 @router.get("/runs")
@@ -114,10 +121,11 @@ def decide_idea(run_id: str, req: IdeaDecisionRequest) -> dict:
 
 @router.post("/runs/{run_id}/script")
 def decide_script(run_id: str, req: ScriptDecisionRequest) -> dict:
-    run = runner.decide_script(run_id, req.approve, req.script, req.caption)
+    run = runner.decide_script(run_id, approve=req.approve, decision=req.decision,
+                               script=req.script, caption=req.caption, hashtags=req.hashtags)
     if run is None:
         raise HTTPException(404, "Run không tồn tại (server restart?)")
-    log.info("workflow %s · script gate %s%s", run_id,
-             "APPROVED" if req.approve else "REJECTED",
-             " (edited)" if req.approve and (req.script or req.caption) else "")
+    log.info("workflow %s · script gate decision=%s%s", run_id,
+             run["script_gate"]["decision"],
+             " (edited)" if req.script or req.caption or req.hashtags else "")
     return run

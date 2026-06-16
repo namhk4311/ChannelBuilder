@@ -59,6 +59,31 @@ export interface RunStep {
   progress: number | null
 }
 
+/** Verdict QC kịch bản (bước qc_script + đính kèm script gate). Xem backend/workflow/qc_script.py. */
+export type QcCheckStatus = 'pass' | 'warn' | 'skipped'
+
+export type QcIssueType =
+  | 'clip_missing'
+  | 'clip_coverage'
+  | 'script_cut'
+  | 'hook_weak'
+  | 'flow'
+  | 'clip_mismatch'
+
+export interface QcIssue {
+  type: QcIssueType
+  severity: 'error' | 'warning'
+  where: string
+  detail: string
+  suggested_fix: string
+}
+
+export interface QcVerdict {
+  verdict: 'pass' | 'warn'
+  checks: { deterministic: QcCheckStatus; llm: QcCheckStatus }
+  issues: QcIssue[]
+}
+
 export interface WorkflowRun {
   id: string
   topic: string | null
@@ -90,6 +115,9 @@ export interface GateDecisionBody {
  */
 export type PublishMode = 'review_publish' | 'schedule'
 
+/** QC kịch bản: auto = AI tự sửa lỗi nặng rồi dựng · confirm = dừng gate cho human duyệt/viết lại. */
+export type QcMode = 'auto' | 'confirm'
+
 export interface RunSummary {
   id: string
   topic: string | null
@@ -109,6 +137,7 @@ export interface StartRunBody {
   music_volume?: number // 0.05 - 1.0
   review_script?: boolean // dừng gate cho human duyệt/sửa kịch bản (Chat tab)
   publish_mode?: PublishMode // review_publish (đăng ngay) | schedule (lên lịch)
+  qc_mode?: QcMode // auto (AI tự sửa) | confirm (dừng gate QC)
 }
 
 export const fetchAgents = () => get<{ agents: Agent[] }>('/workflow/agents')
@@ -132,3 +161,7 @@ export const decideScript = (
   caption?: string,
   hashtags?: string[],
 ) => post<WorkflowRun>(`/workflow/runs/${runId}/script`, { approve, script, caption, hashtags })
+
+/** Cho Creative [B] viết lại kịch bản theo feedback QC (chỉ ở gate confirm, còn lượt). */
+export const regenerateScript = (runId: string) =>
+  post<WorkflowRun>(`/workflow/runs/${runId}/script`, { decision: 'regenerate' })

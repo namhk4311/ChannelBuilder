@@ -8,18 +8,22 @@ import {
 } from '@/components/ui/accordion'
 import { Progress } from '@/components/ui/progress'
 import { cn } from '@/lib/utils'
-import type { RunStep } from '@/api/workflow'
+import type { QcVerdict, RunStep } from '@/api/workflow'
 import type { AnalyzeResult, InsightDigest } from '@/api/analyst'
 import { AnalystStepOutput } from '@/components/workflow/analyst-step-output'
 import { InsightBlock } from '@/components/workflow/analyst-insight-block'
+import { QcVerdictCard } from '@/components/workflow/qc-verdict-card'
 import { StepOutput } from '@/components/workflow/step-output'
 import { StepStatusChip } from '@/components/workflow/step-status-chip'
 
-/** Body output 1 step: [E] dùng bảng graded riêng; [B] hiện insight đã nạp (nếu có) trên bảng ý tưởng. */
+/** Body output 1 step: [E] dùng bảng graded riêng; [★] QC dùng card verdict; [B] hiện insight đã nạp. */
 function StepBody({ step }: { step: RunStep }) {
   const out = step.output
   if (step.tool === 'analyze_batch' && Array.isArray((out as AnalyzeResult)?.videos)) {
     return <AnalystStepOutput output={out as AnalyzeResult} />
+  }
+  if (step.tool === 'qc_script') {
+    return <QcVerdictCard verdict={(out as { qc_verdict?: QcVerdict })?.qc_verdict} />
   }
   const usedInsight =
     step.tool === 'generate_ideas'
@@ -84,8 +88,8 @@ function StepTimer({ step }: { step: RunStep }) {
 
 // Thứ tự chuẩn của pipeline — sort phòng hờ data về không đúng thứ tự.
 const STEP_ORDER = [
-  'scan_trends', 'generate_ideas', 'idea_approval', 'generate_script', 'script_approval',
-  'produce_video', 'human_approval', 'publish_video', 'get_video_metrics',
+  'scan_trends', 'generate_ideas', 'idea_approval', 'generate_script', 'qc_script', 'script_approval',
+  'produce_video', 'human_approval', 'publish_video', 'get_video_metrics', 'analyze_batch',
 ]
 const HIDDEN_STEPS = new Set(['idea_approval', 'human_approval', 'script_approval'])
 const stepRank = (id: string) => {

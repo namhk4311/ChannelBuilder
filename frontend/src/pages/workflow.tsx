@@ -16,6 +16,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import type { PublishMode, RunStatus, StepStatus } from '@/api/workflow'
 import { useLibraryStore } from '@/stores/library-store'
 import { useAgents, useRun, useRuns, useStartRun } from '@/hooks/use-workflow'
+import { ScriptGate } from '@/components/chat/script-gate'
 import { AgentCatalog } from '@/components/workflow/agent-catalog'
 import { ApprovalGate } from '@/components/workflow/approval-gate'
 import { InsightActiveBanner } from '@/components/workflow/insight-active-banner'
@@ -42,6 +43,7 @@ export default function WorkflowPage() {
   const [subtitles, setSubtitles] = useState(true)
   const [music, setMusic] = useState<MusicPickerValue>(MUSIC_PICKER_DEFAULT)
   const [publishMode, setPublishMode] = useState<PublishMode>('review_publish')
+  const [qcConfirm, setQcConfirm] = useState(false)
   const [runId, setRunId] = useState<string | null>(null)
 
   const agents = useAgents()
@@ -70,6 +72,7 @@ export default function WorkflowPage() {
         beat_sync: music.beat_sync,
         music_volume: music.music_volume,
         publish_mode: publishMode,
+        qc_mode: qcConfirm ? 'confirm' : 'auto',
       },
       { onError: (e) => toast.error(`Không khởi động được run: ${e.message}`) },
     )
@@ -92,6 +95,8 @@ export default function WorkflowPage() {
         setMusic={setMusic}
         publishMode={publishMode}
         setPublishMode={setPublishMode}
+        qcConfirm={qcConfirm}
+        setQcConfirm={setQcConfirm}
         onStart={handleStart}
         isPending={start.isPending}
         runActive={runActive}
@@ -114,6 +119,9 @@ export default function WorkflowPage() {
         />
       )}
       {agents.data && <PipelineFlow agents={agents.data} steps={run.data?.steps ?? []} />}
+
+      {/* QC gate (confirm mode) — human duyệt / cho Creative viết lại / huỷ kịch bản */}
+      {run.data && <ScriptGate run={run.data} />}
 
       {/* Human gate — hành động khớp chế độ đăng đã chốt lúc start (đọc run.publish_mode) */}
       {run.data && <ApprovalGate run={run.data} />}

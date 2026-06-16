@@ -62,6 +62,16 @@ SCOUT_MODEL         = os.getenv("SCOUT_MODEL")         or "minimax/minimax-m2.5"
 # true (default): Scout dùng LLM extract trang TikTok thật (metric=likes); false: chỉ dataset seed (đỡ quota).
 SCOUT_USE_LLM       = (os.getenv("SCOUT_USE_LLM") or "true").lower() == "true"
 
+# ─── Creative QC (plan-level) — review script_package TRƯỚC khi produce ──────
+# Lớp deterministic (clip thiếu/coverage/cụt) LUÔN chạy (0 quota). Cờ này bật
+# THÊM lớp LLM judge (hook/mạch/khớp-ý) — true (default) đồng bộ SCOUT_USE_LLM;
+# set false để đỡ quota MaaS lúc dev (deterministic vẫn gánh chính). QC tái dùng
+# CREATIVE_MODEL qua _chat (không có model riêng để tránh dead config).
+CREATIVE_QC_USE_LLM = (os.getenv("CREATIVE_QC_USE_LLM") or "true").lower() == "true"
+# Số lần TỐI ĐA cho [B] viết lại kịch bản theo feedback QC (auto self-correct hoặc
+# human bấm "viết lại"). Chặn vòng lặp vô tận / đốt quota. 0 = không bao giờ viết lại.
+CREATIVE_QC_MAX_RETRIES = int(os.getenv("CREATIVE_QC_MAX_RETRIES", "2"))
+
 # ─── TikTok API — Publisher agent ────────────────────────────────────────────
 TIKTOK_CLIENT_KEY    = os.getenv("TIKTOK_CLIENT_KEY")
 TIKTOK_CLIENT_SECRET = os.getenv("TIKTOK_CLIENT_SECRET")

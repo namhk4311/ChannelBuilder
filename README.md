@@ -249,6 +249,39 @@ Workflow orchestrator sẽ tự chọn path dựa vào input; không cần confi
 
 ---
 
+## QC kịch bản (plan-level) — chặn lỗi TRƯỚC produce
+
+Bước **`qc_script`** (orchestrator, code ★) chèn giữa `generate_script` →
+`script_approval` để bắt lỗi trước khi đốt quota ElevenLabs/render. **Non-blocking,
+KHÔNG hard-block** — verdict chỉ là cảnh báo, human quyết retry ở gate.
+
+- **Deterministic (luôn chạy, 0 quota):** đối chiếu mỗi câu shot_list với kho clip
+  thật (`clip_missing` nếu tag + alt_tag đều rỗng bucket; `clip_coverage` nếu tổng
+  thời lượng clip < thời lượng câu → lặp hình), cụt-detection tiếng Việt
+  (`script_cut` khi kết treo liên từ / thiếu dấu câu, `hook_weak` khi hook < 3 từ),
+  gộp `warnings[]` của validator [B].
+- **LLM judge (cờ `CREATIVE_QC_USE_LLM`, default true):** chấm hook/mạch/khớp-ý
+  (`clip_mismatch`), grounded bằng metadata clip thật + lỗi deterministic. Tái dùng
+  `_chat` (CREATIVE_MODEL). 429/JSON vỡ/thiếu dep → `llm=skipped`, deterministic gánh.
+- **Verdict** `{verdict: pass|warn, checks: {deterministic, llm}, issues[]}` gắn vào
+  output bước `qc_script` (timeline) + bước `script_approval` (gate) → UI card badge
+  ("Kiểm tự động" / "AI đánh giá") + danh sách issue tiếng Việt + gợi ý sửa. Tắt LLM
+  judge: `CREATIVE_QC_USE_LLM=false`.
+
+**Vòng lặp tự sửa (`qc_mode`, toggle "Cần xác nhận kịch bản" ở run-controls):**
+- **`auto` (default):** B → QC → nếu còn **lỗi nặng** (severity=error) thì AI tự cho
+  Creative viết lại (kèm warnings làm chỉ dẫn sửa) tối đa `CREATIVE_QC_MAX_RETRIES`
+  lần → rồi dựng. Không cần human. Cảnh báo nhẹ không chặn.
+- **`confirm`:** B → QC → **dừng** ở gate; human bấm **Tiếp tục** / **Cho Creative
+  viết lại** (regenerate với feedback QC, còn lượt thì hiện nút) / **Huỷ**.
+- Feedback QC được nhồi vào prompt `generate_script(qc_feedback=...)` để bản viết lại
+  khắc phục đúng các lỗi. Cap `CREATIVE_QC_MAX_RETRIES` (default 2) chặn đốt quota.
+
+Module: `backend/workflow/qc_script.py` (pure, stdlib-importable → unit-test trên
+python trần: `python3 backend/tests/test_qc_script.py`).
+
+---
+
 ## API endpoints
 
 | Method | Path | Mô tả |

@@ -50,6 +50,8 @@ interface RunControlsProps {
   setMusic: (v: MusicPickerValue) => void
   publishMode: PublishMode
   setPublishMode: (v: PublishMode) => void
+  qcConfirm: boolean
+  setQcConfirm: (v: boolean) => void
   onStart: () => void
   isPending: boolean
   runActive: boolean
@@ -71,6 +73,8 @@ export function RunControls({
   setMusic,
   publishMode,
   setPublishMode,
+  qcConfirm,
+  setQcConfirm,
   onStart,
   isPending,
   runActive,
@@ -80,13 +84,34 @@ export function RunControls({
     <Card>
       <CardContent className="space-y-5">
         <AgentGroup code="B" name="Creative" hint="Ý tưởng & kịch bản">
-          <Input
-            placeholder="Chủ đề (tuỳ chọn) — vd: canteen VNG, góc làm việc…"
-            value={topic}
-            onChange={(e) => setTopic(e.target.value)}
-            disabled={runActive}
-            className="md:max-w-md"
-          />
+          <div className="flex flex-col gap-3">
+            <Input
+              placeholder="Chủ đề (tuỳ chọn) — vd: canteen VNG, góc làm việc…"
+              value={topic}
+              onChange={(e) => setTopic(e.target.value)}
+              disabled={runActive}
+              className="md:max-w-md"
+            />
+            <div className="flex items-start gap-2">
+              <Switch
+                id="wf-qc-confirm"
+                checked={qcConfirm}
+                onCheckedChange={setQcConfirm}
+                disabled={runActive}
+                className="mt-0.5"
+              />
+              <div className="space-y-0.5">
+                <Label htmlFor="wf-qc-confirm" className="text-sm text-muted-foreground">
+                  Cần xác nhận kịch bản (QC)
+                </Label>
+                <p className="text-xs text-muted-foreground">
+                  {qcConfirm
+                    ? 'Dừng ở bước QC để bạn duyệt / cho Creative viết lại / huỷ.'
+                    : 'Tự động: AI tự cho Creative viết lại nếu QC báo lỗi nặng (tối đa 2 lần) rồi dựng.'}
+                </p>
+              </div>
+            </div>
+          </div>
         </AgentGroup>
 
         <AgentGroup code="C" name="Producer" hint="Dựng video · phụ đề · nhạc nền">

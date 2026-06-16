@@ -6,6 +6,7 @@ import {
   fetchAgents,
   fetchRun,
   fetchRuns,
+  regenerateScript,
   startRun,
   type GateDecisionBody,
   type WorkflowRun,
@@ -82,12 +83,20 @@ export function useIdeaDecision(runId: string | null) {
   })
 }
 
-/** Script gate: duyệt (kèm bản đã sửa) / huỷ. */
+/** Script gate: duyệt (kèm bản đã sửa) / cho viết lại (regenerate) / huỷ. */
 export function useScriptDecision(runId: string | null) {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (args: { approve: boolean; script?: string; caption?: string; hashtags?: string[] }) =>
-      decideScript(runId!, args.approve, args.script, args.caption, args.hashtags),
+    mutationFn: (args: {
+      approve: boolean
+      regenerate?: boolean
+      script?: string
+      caption?: string
+      hashtags?: string[]
+    }) =>
+      args.regenerate
+        ? regenerateScript(runId!)
+        : decideScript(runId!, args.approve, args.script, args.caption, args.hashtags),
     onSuccess: (run) => {
       qc.setQueryData(['workflow', 'run', run.id], run)
       qc.invalidateQueries({ queryKey: ['workflow', 'run', run.id] })

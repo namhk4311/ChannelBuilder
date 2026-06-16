@@ -1,13 +1,14 @@
 import { useState } from 'react'
-import { Check, FileText, Pencil, X } from 'lucide-react'
+import { Check, FileText, Pencil, RefreshCw, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { ConfirmDialog } from '@/components/common/confirm-dialog'
-import type { WorkflowRun } from '@/api/workflow'
+import type { QcVerdict, WorkflowRun } from '@/api/workflow'
 import { useScriptDecision } from '@/hooks/use-workflow'
 import { HashtagInput } from '@/components/chat/hashtag-input'
+import { QcVerdictCard } from '@/components/workflow/qc-verdict-card'
 
 interface ScriptOutput {
   script?: string
@@ -15,6 +16,9 @@ interface ScriptOutput {
   caption?: string
   hashtags?: string[]
   title?: string
+  qc_verdict?: QcVerdict | null
+  /** Còn lượt cho Creative viết lại theo QC (ẩn nút khi hết lượt CREATIVE_QC_MAX_RETRIES). */
+  can_regenerate?: boolean
 }
 
 /**
@@ -64,6 +68,18 @@ export function ScriptGate({ run }: { run: WorkflowRun }) {
       },
     )
 
+  const regenerate = () =>
+    decision.mutate(
+      { approve: false, regenerate: true },
+      {
+        onSuccess: () => toast.success('Đang cho Creative viết lại theo cảnh báo QC…'),
+        onError: (e) => toast.error(`Không gửi được: ${e.message}`),
+      },
+    )
+
+  // Nút "viết lại" chỉ hiện khi QC có cảnh báo VÀ còn lượt viết lại (backend bơm can_regenerate).
+  const canRegenerate = !!out.can_regenerate && (out.qc_verdict?.issues?.length ?? 0) > 0
+
   return (
     <>
       <Alert variant="warning">
@@ -71,6 +87,8 @@ export function ScriptGate({ run }: { run: WorkflowRun }) {
         <AlertTitle>Duyệt kịch bản trước khi dựng video</AlertTitle>
         <AlertDescription>
           <div className="w-full space-y-2.5">
+            {/* QC verdict — soi clip/cụt/hook trước khi dựng; human quyết sửa/retry. */}
+            <QcVerdictCard verdict={out.qc_verdict} />
             {out.title && (
               <p>
                 <span className="text-muted-foreground">Ý tưởng:</span>{' '}
@@ -141,6 +159,16 @@ export function ScriptGate({ run }: { run: WorkflowRun }) {
                   disabled={decision.isPending}
                 >
                   Huỷ sửa
+                </Button>
+              )}
+              {canRegenerate && !editing && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={regenerate}
+                  disabled={decision.isPending}
+                >
+                  <RefreshCw /> Cho Creative viết lại
                 </Button>
               )}
               <Button size="sm" onClick={approve} disabled={decision.isPending}>

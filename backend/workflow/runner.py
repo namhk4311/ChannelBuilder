@@ -43,6 +43,8 @@ STEP_PLAN: list[dict[str, str]] = [
      "title": "Human chọn ý tưởng"},
     {"id": "generate_script", "agent": "creative", "code": "B", "tool": "generate_script",
      "title": "Viết kịch bản + shot list"},
+    {"id": "qc_script", "agent": "orchestrator", "code": "★", "tool": "qc_script",
+     "title": "QC kịch bản"},
     {"id": "script_approval", "agent": "orchestrator", "code": "★", "tool": "script_gate",
      "title": "Human duyệt / sửa kịch bản"},
     {"id": "produce_video", "agent": "producer", "code": "C", "tool": "produce_video",
@@ -83,7 +85,8 @@ def _new_run(topic: str | None, library: str,
              music_volume: float = 0.3,
              review_script: bool = False,
              pick_idea: bool = False,
-             publish_mode: str = "review_publish") -> dict:
+             publish_mode: str = "review_publish",
+             qc_mode: str = "auto") -> dict:
     run_id = f"run_{next(_SEQ):04d}"
     run = {
         "id": run_id, "topic": topic,
@@ -92,6 +95,9 @@ def _new_run(topic: str | None, library: str,
         "beat_sync": beat_sync,
         "music_volume": music_volume,
         "review_script": review_script,
+        # QC kịch bản: 'auto' = AI tự sửa nếu QC báo lỗi nặng rồi dựng (không cần human);
+        # 'confirm' = dừng ở gate cho human duyệt / cho viết lại / huỷ.
+        "qc_mode": qc_mode,
         "pick_idea": pick_idea,
         # Chế độ đăng chọn từ đầu — gate đọc lại field này để hiện đúng nút
         # (đăng ngay vs lên lịch). Persist trên run nên không reset khi UI remount.
@@ -101,6 +107,7 @@ def _new_run(topic: str | None, library: str,
         "script_gate": {"decision": None, "decided_at": None},
         "idea_gate": {"decision": None, "decided_at": None},
         "idea_choice": None,
+        "qc_verdict": None,          # verdict QC kịch bản (gắn sau generate_script)
         "script_override": None,
         "caption_override": None,
         "hashtags_override": None,
@@ -285,26 +292,77 @@ def _run_pipeline(run: dict) -> None:  # noqa: PLR0915 — pipeline tuần tự,
         run["status"] = "running"
         _finish_step(run, s, "ok", {"chosen": best.get("title")}, f"Đã chọn: {best.get('title')}")
 
-    # ---- 3. [B] generate_script — viết kịch bản cho ý tưởng đã chọn
-    s = _start_step(run, "generate_script")
+    # ---- 3 + 3a + 3b: [B] generate_script → [★] QC → quyết (auto tự sửa / human gate)
+    # Vòng lặp tự sửa: QC còn LỖI NẶNG (severity=error) → auto mode tự cho [B] viết
+    # lại (kèm feedback QC) tối đa CREATIVE_QC_MAX_RETRIES lần rồi dựng; confirm mode
+    # dừng ở gate cho human bấm "viết lại" / "tiếp tục" / "huỷ". Cảnh báo nhẹ KHÔNG chặn.
     from agents.creative import generate_script
-    result = generate_script(idea=best)
-    package = result.get("package")
-    if result.get("status") != "ok" or not package:
-        return _fail_run(run, s, result.get("error") or "Không sinh được script", result)
-    n_words = len((package.get("script") or "").split())
-    _finish_step(run, s, "ok", result,
-                 f"Chọn “{best.get('title')}” (est_fit {best.get('est_fit')}) • "
-                 f"script {n_words} từ • {len(package.get('shot_list') or [])} câu • LLM MaaS sinh thật",
-                 data_source="real")
+    from config import CREATIVE_QC_MAX_RETRIES, CREATIVE_QC_USE_LLM
+    from .qc_script import run_script_qc
 
-    # ---- 3b. [★] script gate — Human duyệt/sửa kịch bản (chỉ khi review_script)
-    s = _start_step(run, "script_approval")
-    if not run["review_script"]:
-        _finish_step(run, s, "skipped", None, "Không bật duyệt kịch bản (full-auto)")
-    else:
+    confirm_mode = run["qc_mode"] == "confirm" or run["review_script"]
+    qc_feedback = None
+    attempt = 0
+    while True:
+        # 3. generate_script (lần đầu, hoặc viết lại theo feedback QC)
+        s = _start_step(run, "generate_script")
+        result = generate_script(idea=best, qc_feedback=qc_feedback)
+        package = result.get("package")
+        if result.get("status") != "ok" or not package:
+            return _fail_run(run, s, result.get("error") or "Không sinh được script", result)
+        n_words = len((package.get("script") or "").split())
+        retry_note = f" • viết lại lần {attempt}" if attempt else ""
+        _finish_step(run, s, "ok", result,
+                     f"Chọn “{best.get('title')}” (est_fit {best.get('est_fit')}) • "
+                     f"script {n_words} từ • {len(package.get('shot_list') or [])} câu • "
+                     f"LLM MaaS sinh thật{retry_note}",
+                     data_source="real")
+
+        # 3a. QC kịch bản — bắt clip thiếu/coverage/cụt/hook + LLM chấm hook/mạch/khớp-ý.
+        s = _start_step(run, "qc_script")
+        try:
+            verdict = run_script_qc(package, library=run["library"],
+                                    base_warnings=result.get("warnings"),
+                                    use_llm=CREATIVE_QC_USE_LLM)
+        except Exception as e:  # noqa: BLE001 — QC không được giết pipeline
+            verdict = {"verdict": "warn",
+                       "checks": {"deterministic": "skipped", "llm": "skipped"},
+                       "issues": [{"type": "flow", "severity": "warning", "where": "qc",
+                                   "detail": str(e),
+                                   "suggested_fix": "Bỏ qua QC — human tự duyệt kịch bản"}]}
+        run["qc_verdict"] = verdict
+        issues = verdict.get("issues") or []
+        n_err = sum(1 for i in issues if i.get("severity") == "error")
+        can_retry = attempt < CREATIVE_QC_MAX_RETRIES
+        _finish_step(run, s, "ok", {"qc_verdict": verdict},
+                     ("QC: đạt" if verdict.get("verdict") == "pass"
+                      else f"QC: {len(issues)} cảnh báo" + (f" ({n_err} lỗi nặng)" if n_err else ""))
+                     + retry_note,
+                     data_source="real")
+
+        # 3b. quyết định: auto tự sửa, hoặc dừng gate cho human.
+        if not confirm_mode:
+            # AUTO: tự cho [B] viết lại nếu còn lỗi nặng + còn lượt; hết thì dựng.
+            if n_err > 0 and can_retry:
+                attempt += 1
+                qc_feedback = issues
+                continue
+            s = _start_step(run, "script_approval")
+            if verdict.get("verdict") == "pass":
+                note = "QC đạt — tự động dựng video"
+            elif n_err:
+                note = f"QC còn {n_err} lỗi nặng sau {attempt} lần tự sửa — vẫn dựng (human xem lại sau)"
+            else:
+                note = "QC chỉ cảnh báo nhẹ — tự động dựng video"
+            _finish_step(run, s, "skipped", None, note)
+            break
+
+        # CONFIRM: dừng ở gate cho human quyết (tiếp tục / viết lại / huỷ).
+        s = _start_step(run, "script_approval")
         s["status"] = "awaiting"
         run["status"] = "awaiting_script"
+        run["script_gate"]["decision"] = None     # reset cho lần chờ này
+        _SCRIPT_GATES[run["id"]].clear()
         s["output"] = {
             "script": package.get("script"),
             "text_hook": package.get("text_hook"),
@@ -312,11 +370,24 @@ def _run_pipeline(run: dict) -> None:  # noqa: PLR0915 — pipeline tuần tự,
             "hashtags": package.get("hashtags"),
             "shot_list": package.get("shot_list"),
             "title": best.get("title"),
+            # QC verdict đi kèm để human đọc cùng kịch bản; can_regenerate ẩn nút khi hết lượt.
+            "qc_verdict": run.get("qc_verdict"),
+            "can_regenerate": can_retry,
+            "attempt": attempt,
         }
-        s["summary"] = "Pipeline tạm dừng — chờ human duyệt/sửa kịch bản"
+        s["summary"] = "Pipeline tạm dừng — chờ human duyệt / cho viết lại kịch bản"
         run["updated_at"] = _now()
         _SCRIPT_GATES[run["id"]].wait()
-        if run["script_gate"]["decision"] != "approved":
+        decision = run["script_gate"]["decision"]
+        run["status"] = "running"                 # rời trạng thái chờ
+
+        if decision == "regenerate" and can_retry:
+            attempt += 1
+            qc_feedback = issues
+            _finish_step(run, s, "ok", {"qc_verdict": verdict},
+                         f"Human cho Creative viết lại (lần {attempt})")
+            continue
+        if decision == "rejected":   # approved hoặc regenerate-hết-lượt đều đi tiếp dựng
             _finish_step(run, s, "rejected", s["output"], "Human huỷ ở bước kịch bản")
             for other in run["steps"]:
                 if other["status"] == "pending":
@@ -324,6 +395,7 @@ def _run_pipeline(run: dict) -> None:  # noqa: PLR0915 — pipeline tuần tự,
             run["status"] = "rejected"
             run["updated_at"] = _now()
             return None
+        # approved → áp bản sửa nếu human có chỉnh
         edited = False
         if run.get("script_override"):
             package["script"] = run["script_override"]    # lời thoại user đã sửa
@@ -334,9 +406,9 @@ def _run_pipeline(run: dict) -> None:  # noqa: PLR0915 — pipeline tuần tự,
         if run.get("hashtags_override"):
             package["hashtags"] = run["hashtags_override"]  # hashtag user đã sửa (dùng khi đăng)
             edited = True
-        run["status"] = "running"
         _finish_step(run, s, "ok", {"script": package.get("script"), "caption": package.get("caption")},
                      "Đã duyệt kịch bản" + (" (đã sửa)" if edited else ""))
+        break
 
     # ---- 4. [C] produce_video — pipeline 6 bước, progress % thật
     s = _start_step(run, "produce_video")
@@ -466,14 +538,16 @@ def start_run(topic: str | None = None, library: str = "vng_insider",
               music_volume: float = 0.3,
               review_script: bool = False,
               pick_idea: bool = False,
-              publish_mode: str = "review_publish") -> dict:
+              publish_mode: str = "review_publish",
+              qc_mode: str = "auto") -> dict:
     run = _new_run(topic, library, subtitles, n_ideas,
                    music_track_id=music_track_id,
                    beat_sync=beat_sync,
                    music_volume=music_volume,
                    review_script=review_script,
                    pick_idea=pick_idea,
-                   publish_mode=publish_mode)
+                   publish_mode=publish_mode,
+                   qc_mode=qc_mode)
 
     def _wrapper() -> None:
         try:
@@ -490,9 +564,9 @@ def start_run(topic: str | None = None, library: str = "vng_insider",
 
     threading.Thread(target=_wrapper, daemon=True,
                      name=f"workflow-{run['id']}").start()
-    log.info("workflow %s started (topic=%r library=%s music=%s beat_sync=%s vol=%.2f publish=%s)",
+    log.info("workflow %s started (topic=%r library=%s music=%s beat_sync=%s vol=%.2f publish=%s qc=%s)",
              run["id"], topic, library,
-             music_track_id or "—", beat_sync, music_volume, publish_mode)
+             music_track_id or "—", beat_sync, music_volume, publish_mode, qc_mode)
     return run
 
 
@@ -520,25 +594,31 @@ def decide_gate(run_id: str, decision: str | None = None,
     return run
 
 
-def decide_script(run_id: str, approve: bool, script: str | None = None,
-                  caption: str | None = None,
+def decide_script(run_id: str, approve: bool = True, decision: str | None = None,
+                  script: str | None = None, caption: str | None = None,
                   hashtags: list[str] | None = None) -> dict | None:
-    """Quyết định ở script gate. approve=True + script/caption/hashtags (optional) → dùng bản đã sửa."""
+    """Quyết định ở script gate: 'approve' (dùng bản gốc/đã sửa) | 'regenerate' (cho [B]
+    viết lại theo feedback QC) | 'reject'. Backward-compat: `approve` bool (True→approve,
+    False→reject) khi `decision` không truyền."""
     run = _RUNS.get(run_id)
     if run is None:
         return None
     if run["status"] != "awaiting_script":
         return run  # idempotent — gate đã quyết hoặc chưa tới
-    run["script_gate"]["decision"] = "approved" if approve else "rejected"
+    if decision is None:
+        decision = "approve" if approve else "reject"
+    gate = {"approve": "approved", "regenerate": "regenerate"}.get(decision, "rejected")
+    run["script_gate"]["decision"] = gate
     run["script_gate"]["decided_at"] = _now()
-    if approve and script and script.strip():
-        run["script_override"] = script.strip()
-    if approve and caption and caption.strip():
-        run["caption_override"] = caption.strip()
-    if approve and hashtags:
-        cleaned = [h.strip() for h in hashtags if h and h.strip()]
-        if cleaned:
-            run["hashtags_override"] = cleaned
+    if gate == "approved":
+        if script and script.strip():
+            run["script_override"] = script.strip()
+        if caption and caption.strip():
+            run["caption_override"] = caption.strip()
+        if hashtags:
+            cleaned = [h.strip() for h in hashtags if h and h.strip()]
+            if cleaned:
+                run["hashtags_override"] = cleaned
     _SCRIPT_GATES[run_id].set()
     return run
 

@@ -374,15 +374,18 @@ def generate_ideas(topic=None, trend_digest=None, insight_digest=None, n_ideas=5
         return {"status": "failed", "error": str(e), "ideas": []}
 
 
-def generate_script(idea, insight_digest=None, target_duration_sec=48):
+def generate_script(idea, insight_digest=None, target_duration_sec=48, qc_feedback=None):
     """Public entry: kiểm cache pregen TRƯỚC, fallback gọi trực tiếp.
 
     Khi router /ideas đã kick off pregen_scripts, cache sẽ có Future tương ứng.
     Tra theo idea hash (insight_digest=None bỏ qua trong key vì pregen không
     truyền insight — nếu user truyền insight thì coi như cache miss).
+
+    `qc_feedback` (list issue QC của bản trước) → BỎ QUA cache (bản cache không có
+    feedback) + gọi thẳng để [B] viết lại khắc phục lỗi (QC retry loop ở orchestrator).
     """
-    # Pregen chỉ track (idea, target_duration_sec) — nếu có insight thì miss
-    if insight_digest is None:
+    # Pregen chỉ track (idea, target_duration_sec) — có insight/feedback thì miss
+    if insight_digest is None and not qc_feedback:
         key = _idea_key(idea or {})
         with _pregen_lock:
             entry = _pregen_cache.get(key)
@@ -403,15 +406,29 @@ def generate_script(idea, insight_digest=None, target_duration_sec=48):
                         _pregen_cache.pop(key, None)
             # rơi xuống direct call
 
-    return _do_generate_script(idea, insight_digest, target_duration_sec)
+    return _do_generate_script(idea, insight_digest, target_duration_sec, qc_feedback)
 
 
-def _do_generate_script(idea, insight_digest=None, target_duration_sec=48):
+def _build_qc_feedback_block(qc_feedback) -> str:
+    """QC issues → chỉ dẫn sửa cho [B] (viết lại khắc phục). '' nếu rỗng."""
+    fb = []
+    for it in qc_feedback or []:
+        if not isinstance(it, dict):
+            continue
+        fb.append(f"- [{it.get('severity', 'warning')}] {it.get('where', '')}: "
+                  f"{it.get('detail', '')} → SỬA: {it.get('suggested_fix', '')}")
+    if not fb:
+        return ""
+    return ("Bản kịch bản TRƯỚC bị các lỗi QC sau. Viết LẠI để khắc phục HẾT các lỗi này, "
+            "giữ đúng tone + cấu trúc + ràng buộc thời lượng/số từ:\n" + "\n".join(fb))
+
+
+def _do_generate_script(idea, insight_digest=None, target_duration_sec=48, qc_feedback=None):
     """Implementation thật — gọi MaaS + parse + validate. Không check cache."""
     t0 = time.monotonic()
-    log.info("script · BẮT ĐẦU · idea=%r dur=%ds insight=%s thread=%s",
+    log.info("script · BẮT ĐẦU · idea=%r dur=%ds insight=%s qc_fb=%s thread=%s",
              (idea or {}).get("title", "?"), target_duration_sec,
-             bool(insight_digest), threading.current_thread().name)
+             bool(insight_digest), len(qc_feedback or []), threading.current_thread().name)
     try:
         user_parts = [
             "Viết trọn gói kịch bản cho ý tưởng sau:",
@@ -421,6 +438,9 @@ def _do_generate_script(idea, insight_digest=None, target_duration_sec=48):
         ]
         if insight_digest:
             user_parts.append("Insight từ kênh (ưu tiên áp dụng):\n" + json.dumps(insight_digest, ensure_ascii=False, indent=2))
+        fb_block = _build_qc_feedback_block(qc_feedback)
+        if fb_block:
+            user_parts.append(fb_block)
 
         raw = _chat(SYSTEM_SCRIPT, "\n\n".join(user_parts))
         log.info("script · parse JSON (%d chars raw)", len(raw))
