@@ -71,6 +71,11 @@ CREATIVE_QC_USE_LLM = (os.getenv("CREATIVE_QC_USE_LLM") or "true").lower() == "t
 # Số lần TỐI ĐA cho [B] viết lại kịch bản theo feedback QC (auto self-correct hoặc
 # human bấm "viết lại"). Chặn vòng lặp vô tận / đốt quota. 0 = không bao giờ viết lại.
 CREATIVE_QC_MAX_RETRIES = int(os.getenv("CREATIVE_QC_MAX_RETRIES", "2"))
+# Model RIÊNG cho LLM judge của QC — tách khỏi CREATIVE_MODEL để "second opinion" độc
+# lập (model CHẤM khác model VIẾT → bắt lỗi tốt hơn, đỡ "tự chấm bài mình"). Khuyến nghị
+# 1 model instruct non-thinking ổn định (minimax/minimax-m2.5, hoặc qwen*-instruct nếu
+# MaaS có). Default = CREATIVE_MODEL (giữ nguyên hành vi tới khi set).
+CREATIVE_QC_MODEL = os.getenv("CREATIVE_QC_MODEL") or CREATIVE_MODEL
 
 # ─── TikTok API — Publisher agent ────────────────────────────────────────────
 TIKTOK_CLIENT_KEY    = os.getenv("TIKTOK_CLIENT_KEY")

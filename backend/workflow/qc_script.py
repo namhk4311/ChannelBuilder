@@ -294,8 +294,13 @@ def _llm_judge(package: dict, clip_meta: list[dict], det_issues: list[dict]) -> 
     if chat is None:
         return None
     try:
+        from config import CREATIVE_QC_MODEL
+        model = CREATIVE_QC_MODEL
+    except Exception:  # noqa: BLE001 — thiếu config (vd test python trần) → để _chat tự default
+        model = None
+    try:
         raw = chat(_QC_SYSTEM_PROMPT, _build_judge_prompt(package, clip_meta, det_issues),
-                   temperature=0.3)
+                   temperature=0.3, model=model)
     except Exception as e:  # noqa: BLE001 — 429/network/timeout → llm=skipped
         log.warning("QC LLM judge lỗi (%s) → llm=skipped", e)
         return None

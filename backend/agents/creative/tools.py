@@ -112,7 +112,7 @@ class RateLimitError(RuntimeError):
     """429 từ gateway — KHÔNG retry, đốt quota vô ích. Caller chờ window reset."""
 
 
-def _chat(system: str, user: str, temperature: float = 0.85, max_tokens: int = 8000) -> str:
+def _chat(system: str, user: str, temperature: float = 0.85, max_tokens: int = 8000, model=None) -> str:
     """Gọi AgentBase MaaS (OpenAI-compatible /chat/completions, STREAMING). Trả raw text.
 
     Dùng stream=True vì response non-stream không gửi byte nào cho tới khi model
@@ -130,15 +130,16 @@ def _chat(system: str, user: str, temperature: float = 0.85, max_tokens: int = 8
     KHÔNG tự retry: 1 lần gọi = đúng 1 request lên gateway. Lỗi raise thẳng để
     Orchestrator tự quyết định gọi lại — đếm được chính xác số request đốt quota.
     """
+    model = model or CREATIVE_MODEL          # caller có thể override (vd QC dùng model riêng)
     if not AGENTBASE_BASE_URL or not AGENTBASE_API_KEY:
         raise RuntimeError("Thiếu AGENTBASE_BASE_URL / AGENTBASE_API_KEY trong env")
-    if not CREATIVE_MODEL:
-        raise RuntimeError("Thiếu CREATIVE_MODEL trong env")
+    if not model:
+        raise RuntimeError("Thiếu CREATIVE_MODEL / model trong env")
 
     sys_chars = len(system or "")
     user_chars = len(user or "")
     log.info("chat · POST %s · model=%s temp=%.2f sys=%dc user=%dc max=%d",
-             AGENTBASE_BASE_URL, CREATIVE_MODEL, temperature,
+             AGENTBASE_BASE_URL, model, temperature,
              sys_chars, user_chars, max_tokens)
     t0 = time.monotonic()
 
@@ -146,7 +147,7 @@ def _chat(system: str, user: str, temperature: float = 0.85, max_tokens: int = 8
         f"{AGENTBASE_BASE_URL}/chat/completions",
         headers={"Authorization": f"Bearer {AGENTBASE_API_KEY}"},
         json={
-            "model": CREATIVE_MODEL,
+            "model": model,
             "messages": [
                 {"role": "system", "content": system},
                 {"role": "user", "content": user},

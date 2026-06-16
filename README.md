@@ -262,7 +262,10 @@ KHÔNG hard-block** — verdict chỉ là cảnh báo, human quyết retry ở g
   gộp `warnings[]` của validator [B].
 - **LLM judge (cờ `CREATIVE_QC_USE_LLM`, default true):** chấm hook/mạch/khớp-ý
   (`clip_mismatch`), grounded bằng metadata clip thật + lỗi deterministic. Tái dùng
-  `_chat` (CREATIVE_MODEL). 429/JSON vỡ/thiếu dep → `llm=skipped`, deterministic gánh.
+  `_chat` với model riêng `CREATIVE_QC_MODEL` (default = `CREATIVE_MODEL`) — nên đặt
+  model CHẤM khác model VIẾT để "second opinion" độc lập; khuyến nghị instruct
+  non-thinking ổn định (`minimax/minimax-m2.5`, hoặc `qwen*-instruct` nếu MaaS có),
+  tránh model reasoning/thinking. 429/JSON vỡ/thiếu dep → `llm=skipped`, deterministic gánh.
 - **Verdict** `{verdict: pass|warn, checks: {deterministic, llm}, issues[]}` gắn vào
   output bước `qc_script` (timeline) + bước `script_approval` (gate) → UI card badge
   ("Kiểm tự động" / "AI đánh giá") + danh sách issue tiếng Việt + gợi ý sửa. Tắt LLM
