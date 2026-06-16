@@ -85,6 +85,9 @@ def _chat(system: str, user: str, temperature: float = 0.1, max_tokens: int = 16
         log.warning("chat · 429 rate limit từ MaaS — KHÔNG retry")
         raise RuntimeError("429 rate limit từ gateway — chờ window reset, không retry")
     resp.raise_for_status()
+    # Ép utf-8: route Gemini của MaaS trả 'text/event-stream' không kèm charset →
+    # requests đoán Latin-1 → mojibake khi decode_unicode. Vô hại với model đã utf-8.
+    resp.encoding = "utf-8"
     chunks = []
     for line in resp.iter_lines(decode_unicode=True):
         if not line or not line.startswith("data:"):

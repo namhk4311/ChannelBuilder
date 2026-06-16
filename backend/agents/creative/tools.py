@@ -167,6 +167,11 @@ def _chat(system: str, user: str, temperature: float = 0.85, max_tokens: int = 8
             "hoặc đổi CREATIVE_MODEL."
         )
     resp.raise_for_status()
+    # Route Gemini của MaaS trả Content-Type 'text/event-stream' KHÔNG kèm charset →
+    # requests đoán ISO-8859-1, khiến iter_lines(decode_unicode=True) decode UTF-8 thành
+    # Latin-1 (mojibake kiểu "Tá»ng thá»i lÆ°á»£ng"). Ép utf-8 cho mọi model
+    # (minimax đã 'charset=utf-8' sẵn nên dòng này vô hại với nó).
+    resp.encoding = "utf-8"
     log.info("chat · stream open (HTTP %d, TTFB %.1fs) — bắt đầu nhận token",
              resp.status_code, time.monotonic() - t0)
 
