@@ -1,12 +1,12 @@
 import type { ChatMessage } from '@/api/chat'
-import { TikTokIcon } from '@/components/icons/tiktok'
+import { DirectorMascot } from '@/components/icons/director-mascot'
 import { Markdown } from './markdown'
 
-/** Avatar tròn của Đạo diễn AI — logo TikTok trên nền đen, dùng chung cho message + typing. */
+/** Avatar tròn của Đạo diễn AI — mascot "folder" cam, dùng chung cho message + typing. */
 export function DirectorAvatar() {
   return (
-    <span className="grid size-8 shrink-0 place-items-center rounded-full bg-black text-white">
-      <TikTokIcon className="size-4" />
+    <span className="grid size-8 shrink-0 place-items-center overflow-hidden rounded-full bg-orange-50">
+      <DirectorMascot className="size-6" />
     </span>
   )
 }

@@ -195,7 +195,7 @@ export default function ChatPage() {
                 <div className="flex items-center gap-3">
                   <DirectorAvatar />
                   <span className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <Loader2 className="size-4 animate-spin" /> Đạo diễn đang soạn…
+                    <Loader2 className="size-4 animate-spin" /> Đợi mình xíu nha~
                   </span>
                 </div>
               )}
@@ -241,13 +241,15 @@ export default function ChatPage() {
                 value={draft}
                 onChange={(e) => setDraft(e.target.value)}
                 onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !e.shiftKey) {
+                  // Bỏ qua khi IME (gõ tiếng Việt) còn đang ghép chữ: nếu gửi lúc này,
+                  // IME sẽ commit chữ cuối SAU setDraft('') → chữ cuối "dính" lại ô nhập.
+                  if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
                     e.preventDefault()
                     onSend(draft)
                   }
                 }}
                 placeholder={
-                  processing ? 'Đang tạo video…' : 'Nhập ý tưởng, trả lời, hoặc gõ “tạo đi” / “đăng đi”…'
+                  processing ? 'Đang tạo video…' : 'Bạn cần hỗ trợ gì hôm nay…'
                 }
                 rows={1}
                 className="max-h-40 min-h-9 flex-1 resize-none border-0 bg-transparent px-0 py-1.5 text-sm shadow-none focus-visible:border-0 focus-visible:ring-0"
