@@ -92,7 +92,7 @@ export function PipelineFlow({ agents, steps = [] }: PipelineFlowProps) {
                 >
                   <div className="flex items-center justify-between gap-2">
                     <span className="inline-flex items-center justify-center size-6 rounded-md bg-primary/10 text-primary text-xs font-semibold shrink-0">
-                      {agent.code}
+                      {i + 1}
                     </span>
                     {agent.build_status === 'planned' && (
                       <span className="text-[11px] text-amber-600 dark:text-amber-400 whitespace-nowrap">

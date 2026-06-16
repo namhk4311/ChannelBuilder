@@ -172,7 +172,7 @@ export default function WorkflowPage() {
               onRetry={() => run.refetch()}
             />
           )}
-          {run.data && <RunStepList steps={run.data.steps} />}
+          {run.data && <RunStepList steps={run.data.steps} ordinal />}
         </CardContent>
       </Card>
 
