@@ -90,32 +90,7 @@ Under the hood it is **five specialized agents behind one orchestrator**. Each i
 Python tool module (`TOOL_DEFINITIONS` + `execute_tool`); the orchestrator chains them into a
 deterministic pipeline with a single human gate before anything goes public.
 
-```
-        ┌──── [A] Scout ────┐                      ┌──── [E] Analyst ────┐
-        │  trend research   │                      │  absolute gate +    │
-        │  → trend_digest   │                      │  insight digest     │
-        └─────────┬─────────┘                      └──────────▲──────────┘
-                  │ trend_digest          metrics (views,     │ insight_digest
-                  ▼                       likes, retention)   │ (next round)
-        ┌───────────────────┐   script   ┌──────────────┐    │
-        │ [B] Creative Brain │──────────► │ [C] Producer │    │
-        │  ideas + 40-55s    │  + shot    │ TTS + clip   │    │
-        │  script + shotlist │   list     │ cut + subs   │    │
-        └───────────────────┘            └──────┬───────┘    │
-                  ▲                              │ 3 MinIO    │
-                  │   ★ qc_script (auto QC)      │ links      │
-                  │                              ▼            │
-                  │                     ┌──────────────────┐  │
-                  └─────────────────────│  ★ HUMAN GATE    │  │
-                    insight feedback    │  approve/reject  │  │
-                                        └────────┬─────────┘  │
-                                                 ▼            │
-                                        ┌──────────────┐      │
-                                        │ [D] Publisher│──────┘
-                                        │  TikTok post │
-                                        │  + schedule  │
-                                        └──────────────┘
-```
+![VNG Channel Agent architecture](assets/architecture.png)
 
 ### [A] Scout — find what works *now*
 Browses real TikTok search results, extracts ~24 videos per keyword with an LLM, and
