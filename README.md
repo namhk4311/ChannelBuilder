@@ -18,6 +18,22 @@
 > Open the **Workflow** tab → enter a topic → watch the A→E pipeline run live, approve at
 > the human gate, and inspect each step's output.
 
+### Limitations
+
+- **Per-channel TikTok connection.** To publish, the agent connects to a *specific* TikTok
+  channel via that channel's TikTok App credentials — a **Client Key** + **Client Secret**
+  (`TIKTOK_CLIENT_KEY` / `TIKTOK_CLIENT_SECRET`). It runs OAuth once to obtain a per-channel
+  access token (saved in `tokens.json` and auto-refreshed via the refresh token).
+- **This demo posts to the team's channel only.** Here the agent uses our team's own Client
+  Key + Client Secret, so it can only post to that channel. To run it for another channel or
+  BU, just swap in that channel's Client Key + Client Secret and re-authorize — no code
+  changes needed.
+- **Sandbox mode → SELF_ONLY posts.** The TikTok App is still in sandbox mode, so for an
+  unaudited client the publish is forced to `SELF_ONLY` (private, visible only inside the
+  team's account) — which is still enough to prove the agent posts for real.
+
+> 👉 Watch the demo video above to see exactly how the agent publishes a video to TikTok.
+
 ---
 
 ## Problem
